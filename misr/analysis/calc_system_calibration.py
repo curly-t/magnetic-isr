@@ -195,8 +195,8 @@ low_border = -0.5
 high_border = 0.5
 
 
-def calculate_system_calibration(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.001, complex_drift=True, plot_sys_resp=False, plot_track_results=False):
-    measurements = select_filter_import_data(Iampl, Ioffs, Ifreq, keyword_list)
+def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.001, complex_drift=True, plot_sys_resp=False, plot_track_results=False):
+    measurements = select_filter_import_data(initialdir, Iampl, Ioffs, Ifreq, keyword_list)
     system_responses = []
     for measrmnt in measurements:
         system_responses.append(freq_phase_ampl(measrmnt, freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift))
