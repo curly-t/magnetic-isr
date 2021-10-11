@@ -1,22 +1,25 @@
+import math as m
 import numpy as np
 import matplotlib.pyplot as plt
 import re
 import warnings
-import math as m
 from scipy.optimize import curve_fit
-from .freq_and_phase_extract import freq_phase_ampl, filepath_generator
+
+from .freq_and_phase_extract import freq_phase_ampl
+from .import_trackdata import select_filter_import_data
 
 
+# MOGOČE TOLE NE SODI RAVNO SEM, ODLOČI SE KASNJE!
 def plot_system_responses(system_responses, name=''):
     fig, (ax_AR, ax_phase) = plt.subplots(figsize=(8, 10), ncols=1, nrows=2, sharex=True)
     for i in range(len(system_responses)):
 
-        freq = system_responses[i]['freq']
-        freq_err = system_responses[i]['freq_err']
-        AR = system_responses[i]['AR']
-        AR_err = system_responses[i]['AR_err']
-        phase = system_responses[i]['phase']
-        phase_err = system_responses[i]['phase_err']
+        freq = system_responses[i].rod_freq
+        freq_err = system_responses[i].rod_freq_err
+        AR = system_responses[i].AR
+        AR_err = system_responses[i].AR_err
+        phase = system_responses[i].rod_phase
+        phase_err = system_responses[i].rod_phase_err
 
         ax_AR.errorbar(np.log10(freq), np.log10(AR), xerr=freq_err/freq, yerr=AR_err/AR,
                        elinewidth=1, capthick=1, capsize=2, markersize=3, marker='o', color='k')
@@ -40,75 +43,6 @@ def plot_system_responses(system_responses, name=''):
         fig.savefig("System_response_for_calibration_{0}.png".format(name), dpi=300)
     
     return fig, ax_AR, ax_phase
-
-
-def calculate_system_calibration(Iampl, Ioffs, foldernames, mass, mass_err, pixelSize=0.00005, freq_err=0.001, complex_drift=True, plot_sys_resp=False, plot_track_results=False):
-    # Pixel size determines the size in real life, of one pixel on the screen. Used for conversion from pixel coords to [m]
-    # pixelSize = m/pixel
-
-    def number_with_comma_to_float(column):
-        return bytes(column.decode("utf-8").replace(",", "."), "utf-8")
-
-    filepaths = []
-    for foldername in foldernames:
-        filepathGen = filepath_generator(foldername, Iampl, Ioffs, Ifreq="*")
-        filepaths += [filepath for filepath in filepathGen]
-
-    system_responses = list(range(len(filepaths)))
-    for i, filepath in zip(range(len(filepaths)), filepaths):
-        # Extract trackData from the choosen file
-        # trackData = np.loadtxt(filepath)
-        trackData = np.loadtxt(filepath, converters={1: number_with_comma_to_float, 3:number_with_comma_to_float})
-
-        # For now, we get the approximate frequency, I offset and I amplitude from file name directly.
-        approxFreq = int((re.search(r"freq\d+", filepath)[0])[4:])/1000
-        # approxIoffs = int((re.search(r"offs\d+", filepath)[0])[4:])/1000
-        approxIampl = int((re.search(r"ampl\d+", filepath)[0])[4:])/1000
-        approxIampl_err = 0.0005     # Supposing a half of a mA resolution!
-        # These quantities are represented in the program as Hz, and A, so as base SI units
-
-        system_responses[i] = freq_phase_ampl(trackData, approxFreq, freq_err=0.1, complex_drift=complex_drift, plot_track_results=plot_track_results)
-
-        # The system_response Amplitude ratio is calculated as (position amplitude / current amplitude) in [m/A]
-        system_responses[i]['AR'] = system_responses[i]['ampl']*pixelSize/approxIampl
-        # AR is a ratio, so the error is calculated as the sum of two relative errors
-        system_responses[i]['AR_err'] = (system_responses[i]['ampl_err']/system_responses[i]['ampl'] + approxIampl_err/approxIampl) * system_responses[i]['AR']
-
-    # Sort system responses by frequency
-    system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp['freq'])
-
-    # # JUST FOR TEST PURPOSES ------------------------------------------------------------------------------------
-    # # In this part, we inject data from Brooks_et_al, just to test the fitting and parameter extraction.
-    # # If this is not wanted - just comment out this whole block of code
-    # brooks_AR_data = np.loadtxt("odziv_voda_Brooks_et_al_amplitude.dat")
-    # brooks_phase_data = np.loadtxt("odziv_voda_Brooks_et_al_phase.dat")
-    #
-    # system_responses = [{} for i in range(len(brooks_phase_data))]
-    # for i in range(len(system_responses)):
-    #     system_responses[i]['AR'] = brooks_AR_data[i, 1]
-    #     system_responses[i]['AR_err'] = 0.005 * brooks_AR_data[i, 1]    # Predpostavka
-    #     system_responses[i]['freq'] = brooks_AR_data[i, 0] / (2 * np.pi)
-    #     system_responses[i]['freq_err'] = brooks_AR_data[i, 0] * 0.0005 / (2 * np.pi)
-    #     system_responses[i]['phase'] = brooks_phase_data[i, 1] * np.pi / 180.0
-    #     system_responses[i]['phase_err'] = 0.005 * brooks_phase_data[i, 1] * np.pi / 180.0
-    # # -----------------------------------------------------------------------------------------------------------
-
-    # Manually estimate freq range borders for low and high frequency regimes
-    low_idx_border, high_idx_border = estimate_freq_range_borders(system_responses)
-
-    # Calculate the current to force calibration constant alpha, from high freq system response
-    alpha, alpha_err = calculate_force_current_factor(system_responses[high_idx_border:], mass, mass_err)
-
-    # Calculate system compliance "k", for use in measurements.
-    k, k_err = calculate_system_compliance(system_responses[:low_idx_border], alpha, alpha_err)
-
-    # print(alpha, alpha_err, k, k_err)
-
-    # TODO --> DODAJ IZRAČUN NAPAK! (od tu dalje)
-    c = fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha)
-
-    print("DONE")
-    return alpha, k, c
 
 
 def estimate_freq_range_borders(system_responses):
@@ -167,9 +101,9 @@ def estimate_freq_range_borders(system_responses):
     high_idx_border = len(system_responses) - 1
 
     for i in range(len(system_responses) - 1):
-        if m.log10(system_responses[i+1]['freq']) >= low_border and m.log10(system_responses[i]['freq']) < low_border:
+        if m.log10(system_responses[i+1].rod_freq) >= low_border and m.log10(system_responses[i].rod_freq) < low_border:
             low_idx_border = i + 1
-        elif m.log10(system_responses[i+1]['freq']) >= high_border and m.log10(system_responses[i]['freq']) < high_border:
+        elif m.log10(system_responses[i+1].rod_freq) >= high_border and m.log10(system_responses[i].rod_freq) < high_border:
             high_idx_border = i + 1
     
     return low_idx_border, high_idx_border
@@ -177,9 +111,9 @@ def estimate_freq_range_borders(system_responses):
 
 def calculate_force_current_factor(high_freq_system_responses, mass, mass_err, normal_power_tol=1):
     # Construct arrays for line fitting
-    ARs = [sys_resp['AR'] for sys_resp in high_freq_system_responses]
-    AR_errs = [sys_resp['AR_err'] for sys_resp in high_freq_system_responses]
-    freqs = [sys_resp['freq'] for sys_resp in high_freq_system_responses]
+    ARs = [sys_resp.AR for sys_resp in high_freq_system_responses]
+    AR_errs = [sys_resp.AR_err for sys_resp in high_freq_system_responses]
+    freqs = [sys_resp.rod_freq for sys_resp in high_freq_system_responses]
 
     # Fit a line trough the high frequency regime data points
     # Error is returned unscaled, wights must satisfy: weights = 1/sigma**2
@@ -206,8 +140,8 @@ def calculate_force_current_factor(high_freq_system_responses, mass, mass_err, n
 
 
 def calculate_system_compliance(low_freq_system_responses, alpha, alpha_err):
-    ARs = [sys_resp['AR'] for sys_resp in low_freq_system_responses]
-    AR_errs = [sys_resp['AR_err'] for sys_resp in low_freq_system_responses]
+    ARs = [sys_resp.AR for sys_resp in low_freq_system_responses]
+    AR_errs = [sys_resp.AR_err for sys_resp in low_freq_system_responses]
 
     # Optimal combination of ARs is to weight them by weights = 1./sigma**2 (Wikipedia)
     AR_avg = np.average(ARs, weights=1./np.square(AR_errs))
@@ -226,7 +160,7 @@ def calculate_system_compliance(low_freq_system_responses, alpha, alpha_err):
 def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
 
     def AR_func(nu, c):
-        return alpha/(np.sqrt((c * 2*np.pi*nu)**2 + (k - mass * 4.*np.pi*np.pi*nu**2)**2))
+        return alpha/(np.sqrt((c * 2*np.pi*nu)**2 + (k - mass * 4.*np.pi*np.pi*nu*nu)**2))
 
     def phase_func(nu, c):
         return np.arctan2(-2*np.pi*nu * c, k - mass * (2*np.pi*nu)**2)
@@ -234,13 +168,14 @@ def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
     def fit_func(nu, c):
         return np.concatenate([AR_func(nu, c), phase_func(nu, c)])
 
-    ARs = np.array([sys_resp['AR'] for sys_resp in system_responses])
-    phases = np.array([sys_resp['phase'] for sys_resp in system_responses])
-    freqs = np.array([sys_resp['freq'] for sys_resp in system_responses])
+    ARs = np.array([sys_resp.AR for sys_resp in system_responses])
+    phases = np.array([sys_resp.rod_phase for sys_resp in system_responses])
+    freqs = np.array([sys_resp.rod_freq for sys_resp in system_responses])
 
     # BOUNDS MAY BE CONSTRICTING CORRECT c PARAMETER !
-    coef, cov = curve_fit(fit_func, freqs, np.concatenate([ARs, phases]), p0=[0.0001], bounds=(0.000001, 0.0001))
+    coef, cov = curve_fit(fit_func, freqs, np.concatenate([ARs, phases]), p0=[0.0001], bounds=(0.000001, 0.0001), absolute_sigma=True)
     c = coef[0]
+    c_err = m.sqrt(cov[0, 0])
 
     print("Final calibration fit!")
     fig, ax_AR, ax_phase = plot_system_responses(system_responses)
@@ -248,13 +183,40 @@ def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
     ax_phase.plot(np.log10(freqs), phase_func(freqs, c))
     plt.show()
 
-    return c
+    return c, c_err
 
 
 # System calibration coefficients are determined here.
 # This program would likely return two calibration dicts
 # One for the system properties, and one for the rod properties
 
-# GLOBALS:
+# GLOBALS: - TODO: fix this so you dont have to define global variables!!!
 low_border = -0.5
 high_border = 0.5
+
+
+def calculate_system_calibration(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.001, complex_drift=True, plot_sys_resp=False, plot_track_results=False):
+    measurements = select_filter_import_data(Iampl, Ioffs, Ifreq, keyword_list)
+    system_responses = []
+    for measrmnt in measurements:
+        system_responses.append(freq_phase_ampl(measrmnt, freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift))
+
+    # Sort system responses by frequency
+    system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
+
+    # Manually estimate freq range borders for low and high frequency regimes
+    low_idx_border, high_idx_border = estimate_freq_range_borders(system_responses)
+
+    # Calculate the current to force calibration constant alpha, from high freq system response
+    alpha, alpha_err = calculate_force_current_factor(system_responses[high_idx_border:], mass, mass_err)
+
+    # Calculate system compliance "k", for use in measurements.
+    k, k_err = calculate_system_compliance(system_responses[:low_idx_border], alpha, alpha_err)
+
+    # PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c
+    c, c_err = fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha)
+
+    print("DONE")
+
+    return alpha, k, c, alpha_err, k_err, c_err
+

@@ -72,7 +72,9 @@ def import_filepaths(filepaths):
     measurements = []
     for filepath in filepaths:
         measurements.append(Measurement(filepath))
-    # TODO: GROUP INTO MEASUREMENT RUNS    
+    # TODO: GROUP INTO MEASUREMENT RUNS 
+    # TODO: Introduce the possibility of changing to different micorscope lenses --> differing pixelSize
+    # FOR NOW - pixel_size hardcoded into the MeasurementObject
     return measurements
 
 

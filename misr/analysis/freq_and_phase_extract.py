@@ -3,7 +3,10 @@ import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import warnings
 import math as m
+
+from .ResultsClass import SingleResult
 from .import_trackdata import select_filter_import_data
+from .ResultsClass import SingleResult
 
 
 def running_average(input_array, averaging_len):
@@ -40,7 +43,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_brigh
 
 
         Returns:
-            The function doesnt return anything. It changes the measurement object, and writes the following fields:
+            The function returns a SingleResult class object with the following fields:
 
             rod_freq        -->     The frequencie of the vibration
             rod_freq_err    -->     The absolute error in frequencies
@@ -152,10 +155,8 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_brigh
         warnings.warn("Relativna razlika v frekvencah dobljenih iz brightness data in position data je vecja od {0}".format(freq_err) +
         "\nBrightness freq: {0}\nPosition freq: {1}".format(bright_coefs[1], pos_coefs[1]))
 
-    # Write the results to the measurement object
-    measrmnt.rod_freq = pos_coefs[1]
-    measrmnt.rod_freq_err = m.sqrt(pos_cov[1, 1])
-    measrmnt.rod_ampl = pos_coefs[0]
-    measrmnt.rod_ampl_err = m.sqrt(pos_cov[0, 0])
-    measrmnt.rod_phase = pos_coefs[2]
-    measrmnt.rod_phase_err = m.sqrt(bright_cov[2, 2]) + m.sqrt(pos_cov[2, 2])     # PREDPOSTAVKA DA KR SEŠTEJEŠ SIGME
+    result_dict = {"rod_freq": pos_coefs[1], "rod_freq_err": m.sqrt(pos_cov[1, 1]),
+                    "rod_ampl": pos_coefs[0], "rod_ampl_err": m.sqrt(pos_cov[0, 0]),
+                    "rod_phase": pos_coefs[2], "rod_phase_err": m.sqrt(bright_cov[2, 2]) + m.sqrt(pos_cov[2, 2])}   # PREDPOSTAVKA DA KR SEŠTEJEŠ SIGME     
+    
+    return SingleResult(result_dict, measrmnt)
