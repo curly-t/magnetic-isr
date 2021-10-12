@@ -31,11 +31,6 @@ class Measurement():
         self.positions = self.trackData[:, 2]
         self.brights = self.trackData[:, 3]
 
-        # IF ever need be to import data whose decimal delimeter is set to "," and not to standard "."
-        # def number_with_comma_to_float(column):
-        #     return bytes(column.decode("utf-8").replace(",", "."), "utf-8")
-        # trackData = np.loadtxt(filepath, converters={1: number_with_comma_to_float, 3:number_with_comma_to_float})
-
         self.timeLength = self.trackData[-1, 1] - self.trackData[0, 1]
         self.numFrames = len(self.trackData)
 
