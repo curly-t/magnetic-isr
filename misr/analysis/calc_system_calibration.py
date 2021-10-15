@@ -28,14 +28,10 @@ def plot_system_responses(system_responses, name=''):
                           elinewidth=1, capthick=1, capsize=2, markersize=3, marker='o', color='k')
 
     ax_AR.set_ylabel(r'$\log_{10}(AR)$   (AR [m/A])', fontsize=14)
-    # ax_AR.set_xlim(-2, 2)
-    # ax_AR.set_ylim(-4, -0.5)
     ax_AR.grid()
 
     ax_phase.set_xlabel(r'$\log_{10}(\nu)$', fontsize=14)
     ax_phase.set_ylabel(r'$Phase$', fontsize=14)
-    ax_phase.set_xlim(-2, 2)
-    ax_phase.set_ylim(-np.pi, 0)
     ax_phase.grid()
 
     plt.tight_layout()
