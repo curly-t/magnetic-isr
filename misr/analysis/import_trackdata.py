@@ -53,6 +53,8 @@ def filter_filepaths_by_ampl_offs_freq(filepaths, Iampl="*", Ioffs="*", Ifreq="*
 
 
 def filter_filepaths_by_keywords(filepaths, keyword_list):
+    # Filters by keywords. The dirname must containt at least one of them to be selected.
+    # If keyword_list is an empyt list, no filering is done!
     if len(keyword_list) == 0:
         return filepaths
     else:
