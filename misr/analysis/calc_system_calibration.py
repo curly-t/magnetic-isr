@@ -192,7 +192,7 @@ low_border = -0.5
 high_border = 0.5
 
 
-def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.001,
+def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.01,
     complex_drift=True, plot_sys_resp=False, plot_track_results=False, rod_led_phase_correct=True, filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi):
 
     measurements = select_filter_import_data(initialdir, Iampl, Ioffs, Ifreq, keyword_list)
