@@ -2,7 +2,7 @@ from numpy import pi as np_pi
 
 class SingleResult():
     def __init__(self, result_dict, measurement_object, exceptable_phase_insanity):
-        # This class is used to store the results from a single frequency measurement
+        # This class is used to store the results from a single measurement
         # (one date, one run, one frequency - not all frequencies of the measurement run)
 
         # Measurement class is linked to this single result class
@@ -21,6 +21,9 @@ class SingleResult():
         self.AR = self.meas.pixel_size * self.rod_ampl / self.meas.Iampl
         # AR is a ratio, so the error is calculated as the sum of two relative errors
         self.AR_err = (self.rod_ampl_err/self.rod_ampl + self.meas.Iampl_err/self.meas.Iampl) * self.AR
+
+        # Initially unitialized complex modulus of the SingleResult
+        complex_modulus = None
 
     def phase_sanity_check(self):
         # Returns False (0) if there is no error, and True (1) if there is a phase error
