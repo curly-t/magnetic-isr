@@ -14,6 +14,3 @@ def get_tub_info(initialdir=None)
     # id, W, h, V         (id, Width, hight, Volume (NOT total but water volume used [ml]))
     # Additional comments are saved in a comment
     return np.loadtxt(filepath)
-
-
-    
