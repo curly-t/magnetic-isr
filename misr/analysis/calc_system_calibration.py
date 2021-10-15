@@ -1,4 +1,5 @@
 import math as m
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 import re
@@ -27,8 +28,8 @@ def plot_system_responses(system_responses, name=''):
                           elinewidth=1, capthick=1, capsize=2, markersize=3, marker='o', color='k')
 
     ax_AR.set_ylabel(r'$\log_{10}(AR)$   (AR [m/A])', fontsize=14)
-    ax_AR.set_xlim(-2, 2)
-    ax_AR.set_ylim(-4, -0.5)
+    # ax_AR.set_xlim(-2, 2)
+    # ax_AR.set_ylim(-4, -0.5)
     ax_AR.grid()
 
     ax_phase.set_xlabel(r'$\log_{10}(\nu)$', fontsize=14)
@@ -195,11 +196,20 @@ low_border = -0.5
 high_border = 0.5
 
 
-def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.001, complex_drift=True, plot_sys_resp=False, plot_track_results=False):
+def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.001,
+    complex_drift=True, plot_sys_resp=False, plot_track_results=False, rod_led_phase_correct=True, filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi):
+
     measurements = select_filter_import_data(initialdir, Iampl, Ioffs, Ifreq, keyword_list)
     system_responses = []
     for measrmnt in measurements:
-        system_responses.append(freq_phase_ampl(measrmnt, freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift))
+        sys_resp = freq_phase_ampl(measrmnt, freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift,
+                                   rod_led_phase_correct=rod_led_phase_correct, exceptable_phase_insanity=exceptable_phase_insanity)
+
+        if filter_for_wierd_phases:
+            if not sys_resp.phase_sanity_check():
+                system_responses.append(sys_resp)
+        else:
+            system_responses.append(sys_resp)
 
     # Sort system responses by frequency
     system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)

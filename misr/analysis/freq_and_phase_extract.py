@@ -1,3 +1,4 @@
+from operator import pos
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
@@ -18,7 +19,8 @@ def running_average(input_array, averaging_len):
     return np.convolve(input_array, np.ones((averaging_len, ))/averaging_len, mode='valid')
 
 
-def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_bright_results=False, complex_drift=True):
+def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
+    plot_bright_results=False, complex_drift=True, rod_led_phase_correct=True, exceptable_phase_insanity=0.1*np.pi):
     """ This function calculates the frequency of the vibration of the rod, the relative phase between
         the brightness modulation (current) and the response of the rod (position), and the amplitude of the rod response,
         from the results of rod tracking, and brightness logging.
@@ -71,8 +73,8 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_brigh
 
     try:
         bright_coefs, bright_cov = curve_fit(sinusoid_w_drift, measrmnt.times, measrmnt.brights, sigma=sigmas_bright, absolute_sigma=True,
-            bounds=([0.5*(max_bright - min_bright)/2, measrmnt.Ifreq*0.8, -np.pi, min_bright, -(max_bright - min_bright)/measrmnt.timeLength],
-                    [1.2*(max_bright - min_bright)/2., measrmnt.Ifreq*1.2, np.pi, max_bright, (max_bright - min_bright)/measrmnt.timeLength]))
+            bounds=([0.5*(max_bright - min_bright)/2., measrmnt.Ifreq*0.8, 0., min_bright, -(max_bright - min_bright)/measrmnt.timeLength],
+                    [1.2*(max_bright - min_bright)/2., measrmnt.Ifreq*1.2, 2*np.pi, max_bright, (max_bright - min_bright)/measrmnt.timeLength]))
     except RuntimeError:
         print("The least squares minimization for brightness fitting failed!")
 
@@ -83,7 +85,6 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_brigh
         plt.title("BRIGHT - Freq: {0}".format(measrmnt.Ifreq))
         plt.legend()
         plt.show()
-    
     # -----------------------------------------------------------------------------------------
 
     # Fitting rod position data ---------------------------------------------------------------
@@ -93,10 +94,10 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_brigh
     sigmas_pos = np.ones((measrmnt.numFrames, )) * 0.5      # This is just an educated guess, one pixel precision is assumed
 
     try:
-        # First: fit just for the exact frequency
+        # First: fit just for the exact frequency, disregarding phase information
         pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, measrmnt.times, measrmnt.positions, sigma=sigmas_pos, absolute_sigma=True,
-            bounds=([0.5*(max_pos - min_pos)/2, measrmnt.Ifreq*0.8, bright_coefs[2] - np.pi, min_pos, -(max_pos - min_pos)/measrmnt.timeLength],
-                    [1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, bright_coefs[2], max_pos, (max_pos - min_pos)/measrmnt.timeLength]))
+            bounds=([0.5*(max_pos - min_pos)/2., measrmnt.Ifreq*0.8, 0., min_pos, -(max_pos - min_pos)/measrmnt.timeLength],
+                    [1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, 2*np.pi, max_pos, (max_pos - min_pos)/measrmnt.timeLength]))
 
         # Second: correct for the undesired, complex drift
         averaging_len = int(measrmnt.numFrames / (pos_coefs[1] * measrmnt.timeLength))
@@ -126,8 +127,8 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_brigh
 
             # Finally: Refit the sinusoid to the driftless_data
             pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, driftless_time, driftless_pos_data, sigma=sigmas_pos, absolute_sigma=True,
-                bounds=([0.5*(max_pos - min_pos)/2, measrmnt.Ifreq*0.8, bright_coefs[2] - np.pi, min_pos, -(max_pos - min_pos)/measrmnt.timeLength],
-                        [1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, bright_coefs[2], max_pos, (max_pos - min_pos)/measrmnt.timeLength]))
+                bounds=([0.5*(max_pos - min_pos)/2., measrmnt.Ifreq*0.8, bright_coefs[2] - 2*np.pi - exceptable_phase_insanity, min_pos, -(max_pos - min_pos)/measrmnt.timeLength],
+                        [1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, bright_coefs[2] + exceptable_phase_insanity, max_pos, (max_pos - min_pos)/measrmnt.timeLength]))
 
             if plot_track_results == True:
                 # Display rod position track result and fit
@@ -157,6 +158,11 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False, plot_brigh
 
     result_dict = {"rod_freq": pos_coefs[1], "rod_freq_err": m.sqrt(pos_cov[1, 1]),
                     "rod_ampl": pos_coefs[0], "rod_ampl_err": m.sqrt(pos_cov[0, 0]),
-                    "rod_phase": pos_coefs[2], "rod_phase_err": m.sqrt(bright_cov[2, 2]) + m.sqrt(pos_cov[2, 2])}   # PREDPOSTAVKA DA KR SEŠTEJEŠ SIGME     
-    
-    return SingleResult(result_dict, measrmnt)
+                    "rod_phase": pos_coefs[2] - bright_coefs[2], "rod_phase_err": m.sqrt(bright_cov[2, 2]) + m.sqrt(pos_cov[2, 2])}   # PREDPOSTAVKA DA KR SEŠTEJEŠ SIGME     
+
+    # BECAUSE PHASE OF THE ROD AND PHASE OF THE LED ARE RECORDED DIFFERENTLY - THERE APPEARS AN ADDITIONAL 180 PHASE DIFFERENCE
+    # CORRECT FOR PHASE DIFFERENCE
+    if rod_led_phase_correct:
+        result_dict["rod_phase"] += np.pi
+
+    return SingleResult(result_dict, measrmnt, exceptable_phase_insanity)
