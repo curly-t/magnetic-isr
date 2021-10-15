@@ -8,7 +8,7 @@ def get_rod_info(initialdir=None):
     # Additional comments are saved in a comment
     return np.loadtxt(filepath)
 
-def get_tub_info(initialdir=None)
+def get_tub_info(initialdir=None):
     filepath = askopenfilename(initialdir=initialdir)
     # The fields are: (every value written in each row, all in one collumn)
     # id, W, h, V         (id, Width, hight, Volume (NOT total but water volume used [ml]))
