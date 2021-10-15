@@ -208,6 +208,8 @@ def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*
         if filter_for_wierd_phases:
             if not sys_resp.phase_sanity_check():
                 system_responses.append(sys_resp)
+            else:
+                print("Measurement discarded because of insane phase!")
         else:
             system_responses.append(sys_resp)
 
@@ -226,7 +228,7 @@ def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*
     # PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c
     c, c_err = fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha)
 
-    print("DONE")
+    print("Done!")
 
-    return alpha, k, c, alpha_err, k_err, c_err
+    return np.array([alpha, k, c, alpha_err, k_err, c_err])
 
