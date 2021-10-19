@@ -1,13 +1,14 @@
-import math as m
 import numpy as np
 from scipy.sparse import csr_matrix
+from scipy.sparse.linalg import spsolve
 
-def FDM_matrix(N, ps, hp, htheta, Re, Bo):
+def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
     """Constructs the N x N matrix M* for solving the problem:
             M g - i Re e^2p g = c
             M* g = c
        which represents the solution to the Navier Stokes eq (with BC).
-       FDM ... Finite Difference Method """
+       FDM ... Finite Difference Method
+       N x N internal points."""
     diag_ps = np.ones((N+2)**2) * -2. / (hp*hp)
     diag_thetas = np.ones((N+2)**2) * -2. / (htheta * htheta)
     diag_p1 = np.ones((N+2)**2 - 1) / (htheta * htheta)
@@ -51,3 +52,23 @@ def FDM_matrix(N, ps, hp, htheta, Re, Bo):
     
     # Mogoče deluje pravilno? Nevem čist točno?
     return csr_matrix(M - B), c
+
+
+def get_flowfield_FDM(N, max_p, Bo, Re):
+    """Calculate the flowfield with the FDM.
+        Returns a 2D array in the space (p, theta).
+        The first index runs along the p axis from 0 to max_p (both limits included),
+        The second index rund along the theta axis from 0 to pi/2 (both limits included)."""
+        
+    ps = np.linspace(0, max_p, num=N+2)
+    thetas = np.linspace(0, np.pi/2, num=N+2)
+
+    hp = ps[1] - ps[0]
+    htheta = thetas[1] - thetas[0]
+
+    M, c = construct_FDM_system(N, ps, hp, htheta, Re, Bo)
+
+    return np.reshape(spsolve(M, c), (N+2, N+2))
+
+
+
