@@ -5,7 +5,7 @@ from ..utils.save_and_get_calibration import get_simple_calibration, save_simple
 from ..utils.get_rod_and_tub_info import get_rod_info, get_tub_info
 from .import_trackdata import select_filter_import_data
 from .freq_and_phase_extract import freq_phase_ampl
-from .calc_system_calibration import calculate_system_calibration
+from .calc_system_calibration import simple_calibration
 
 
 def calc_simple_complex_modulus(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=None, initialdir=None, freq_err=0.01, plot_track_results=False, complex_drift=True,
@@ -18,7 +18,7 @@ def calc_simple_complex_modulus(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=No
         rod_info = get_rod_info(initialdir=initialdir)
         tub_info = get_tub_info(initialdir=initialdir)
 
-        calibration_array = calculate_system_calibration(initialdir=initialdir)
+        calibration_array = simple_calibration(initialdir=initialdir)
         save_cal = str(input("Save calibration? (Y or n): "))
         if save_cal == "Y":
             save_simple_calibration(calibration_array, rod_info, tub_info, initialdir=initialdir)

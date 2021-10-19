@@ -192,7 +192,7 @@ low_border = -0.5
 high_border = 0.5
 
 
-def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.01,
+def simple_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.01,
     complex_drift=True, plot_sys_resp=False, plot_track_results=False, rod_led_phase_correct=True, filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi):
 
     measurements = select_filter_import_data(initialdir, Iampl, Ioffs, Ifreq, keyword_list)
@@ -221,7 +221,7 @@ def calculate_system_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*
     # Calculate system compliance "k", for use in measurements.
     k, k_err = calculate_system_compliance(system_responses[:low_idx_border], alpha, alpha_err)
 
-    # PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c
+    # TODO: PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c (TEGA ŠE NISI PREGLEDAL)
     c, c_err = fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha)
 
     print("Done!")
