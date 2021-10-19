@@ -1,13 +1,14 @@
 import math as m
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
-import re
 import warnings
-from scipy.optimize import curve_fit
+from scipy.optimize import curve_fit, minimize
 
 from .freq_and_phase_extract import freq_phase_ampl
 from .import_trackdata import select_filter_import_data
+
+from .num_sim_flowfield import flowfield_FDM, D_sub
+from ..utils.get_rod_and_tub_info import get_rod_info, get_tub_info
 
 
 # MOGOČE TOLE NE SODI RAVNO SEM, ODLOČI SE KASNJE!
@@ -227,4 +228,67 @@ def simple_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword
     print("Done!")
 
     return np.array([alpha, k, c, alpha_err, k_err, c_err])
+
+
+# TODO: figure out a better way to calibrate, add script to save new or get old calibration!
+# TODO: Just temporary calibration calcualtion
+def FDM_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.01,
+    complex_drift=True, plot_sys_resp=False, plot_track_results=False, rod_led_phase_correct=True, filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi):
+    
+    # THIS BIT OF CODE IS THE EXACT SAME AS ABOVE
+    # TODO: PUT THIS IN A SPECIAL FUNCTION
+    measurements = select_filter_import_data(initialdir, Iampl, Ioffs, Ifreq, keyword_list)
+    system_responses = []
+    for measrmnt in measurements:
+        sys_resp = freq_phase_ampl(measrmnt, freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift,
+                                   rod_led_phase_correct=rod_led_phase_correct, exceptable_phase_insanity=exceptable_phase_insanity)
+
+        if filter_for_wierd_phases:
+            if not sys_resp.phase_sanity_check():
+                system_responses.append(sys_resp)
+            else:
+                print("Measurement discarded because of insane phase!")
+        else:
+            system_responses.append(sys_resp)
+
+    # Sort system responses by frequency
+    system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
+
+    # Get rod and tub info
+    rod_info = get_rod_info(initialdir=initialdir)
+    tub_info = get_tub_info(initialdir=initialdir)
+
+    def construct_min_func(N):
+        max_p = tub_info[1]/rod_info[3]     # TODO: OBjects with this would be so much easier and cleaner!!!
+        L = rod_info[1]
+        a = rod_info[3]/2.  # radius of the rod
+        m = rod_info[2]
+        # TODO: INCLUDE CONFIG FILE 
+        # TODO: SET IN config file THE VISOCSITY OF WATER! KINEMATIC VISCOSITY eta = mu / rho  (mu .... Dynamic viscosity - kao true viscosity)
+        eta = 1.0034e-6     # in [m^2/s] @ 20C
+        rho = 998.2         # in [kg/m^3] @ 20C
+
+        omegas = np.array([resp.rod_freq*2*np.pi for resp in system_responses])
+        ARs = np.array([resp.AR * np.exp(1.j * resp.rod_phase) for resp in system_responses])
+
+        def min_func(min_param):
+            alpha, k = min_param[0], min_param[1]
+
+            total_error = 0.
+            for i, omega in enumerate(omegas):
+                Re = rho * omega * a * a / eta
+                g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
+                total_error += np.square(np.abs(alpha/(D_sub(g, omega, eta, hp, htheta, L) + k - m*omega*omega) - ARs[i]))
+            return total_error
+        
+        return min_func
+
+    min_func = construct_min_func(30)
+
+    return minimize(min_func, np.array([5.48e-04, 2.31e-04]))
+    
+
+
+
+
 

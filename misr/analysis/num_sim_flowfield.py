@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
+from scipy.integrate import simps
 
 def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
     """Constructs the N x N matrix M* for solving the problem:
@@ -71,3 +72,9 @@ def flowfield_FDM(N, max_p, Bo, Re):
     return np.reshape(spsolve(M, c), (N+2, N+2)), ps, thetas, hp, htheta
 
 
+def dgdp_at_p_0(g, hp):
+    return (-3.*g[0] + 4.*g[1] - g[2])/(2. * hp)
+
+
+def D_sub(g, omega, eta, hp, htheta, L):
+    return 2.j*L*omega*eta*simps(-dgdp_at_p_0(g, hp), dx=htheta)
