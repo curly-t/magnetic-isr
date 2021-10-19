@@ -54,7 +54,7 @@ def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
     return csr_matrix(M - B), c
 
 
-def get_flowfield_FDM(N, max_p, Bo, Re):
+def flowfield_FDM(N, max_p, Bo, Re):
     """Calculate the flowfield with the FDM.
         Returns a 2D array in the space (p, theta).
         The first index runs along the p axis from 0 to max_p (both limits included),
@@ -68,7 +68,6 @@ def get_flowfield_FDM(N, max_p, Bo, Re):
 
     M, c = construct_FDM_system(N, ps, hp, htheta, Re, Bo)
 
-    return np.reshape(spsolve(M, c), (N+2, N+2))
-
+    return np.reshape(spsolve(M, c), (N+2, N+2)), ps, thetas, hp, htheta
 
 
