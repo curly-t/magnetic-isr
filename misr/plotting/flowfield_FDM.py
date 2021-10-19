@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def visualize_flowfield(flowfield, ps, thetas)
+def visualize_flowfield(flowfield, ps, thetas):
     g = np.transpose(flowfield)
 
     fig = plt.figure()
