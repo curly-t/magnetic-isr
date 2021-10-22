@@ -100,6 +100,7 @@ def get_config():
         conf_file = open(".config", "r")
 
     conf_file_contents = "\n".join(conf_file.readlines())
+    conf_file.close()
 
     meas_dir = re.search("MEAS_DIR='.*'", conf_file_contents)[0][10:-1]
     info_dir = re.search("INFO_DIR='.*'", conf_file_contents)[0][10:-1]

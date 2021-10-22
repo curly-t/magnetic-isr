@@ -2,9 +2,11 @@ import os
 import tkfilebrowser
 import re
 from .MeasurementClass import Measurement
+from ..utils.config import get_config
 
 
-def select_data_dirs(initialdir):
+def select_data_dirs():
+    initialdir = get_config()[0]
     return list(tkfilebrowser.askopendirnames(initialdir=initialdir))
 
 
@@ -80,7 +82,7 @@ def import_filepaths(filepaths):
     return measurements
 
 
-def select_filter_import_data(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[]):
+def select_filter_import_data(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[]):
     """
         This function lets you first select the data folders from which you want to import trackdata measurements,
         then it filters all found .dat filepaths by the current amplitude, offset and frequency. At last if
@@ -94,7 +96,7 @@ def select_filter_import_data(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", 
     """
 
     # Select data direcotries
-    sdirs = select_data_dirs(initialdir)
+    sdirs = select_data_dirs()
 
     # Filter filepaths
     filepaths = get_dotdat_filepaths_from_selected_dirs(sdirs)

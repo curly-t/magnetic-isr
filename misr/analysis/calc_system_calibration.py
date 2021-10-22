@@ -4,11 +4,14 @@ import matplotlib.pyplot as plt
 import warnings
 from scipy.optimize import curve_fit, minimize
 
-from .freq_and_phase_extract import freq_phase_ampl
+from .freq_and_phase_extract import select_and_analyse
 from .import_trackdata import select_filter_import_data
 
 from .num_sim_flowfield import flowfield_FDM, D_sub
-from ..utils.get_rod_and_tub_info import get_rod_info, get_tub_info
+from ..utils.get_rod_and_tub_info import guess_and_get_rod_and_tub_info
+
+from .CalibrationClass import SimpleCalibration
+from ..utils.save_and_get_calibration import save_calibration
 
 
 # MOGOČE TOLE NE SODI RAVNO SEM, ODLOČI SE KASNJE!
@@ -193,22 +196,11 @@ low_border = -0.5
 high_border = 0.5
 
 
-def simple_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.01,
-    complex_drift=True, plot_sys_resp=False, plot_track_results=False, rod_led_phase_correct=True, filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi):
+def simple_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
+    kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
+    system_responses = select_and_analyse(**kwargs)
 
-    measurements = select_filter_import_data(initialdir, Iampl, Ioffs, Ifreq, keyword_list)
-    system_responses = []
-    for measrmnt in measurements:
-        sys_resp = freq_phase_ampl(measrmnt, freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift,
-                                   rod_led_phase_correct=rod_led_phase_correct, exceptable_phase_insanity=exceptable_phase_insanity)
-
-        if filter_for_wierd_phases:
-            if not sys_resp.phase_sanity_check():
-                system_responses.append(sys_resp)
-            else:
-                print("Measurement discarded because of insane phase!")
-        else:
-            system_responses.append(sys_resp)
+    rod_info, tub_info = guess_and_get_rod_and_tub_info([sr.meas.dirname for sr in system_responses])
 
     # Sort system responses by frequency
     system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
@@ -225,38 +217,25 @@ def simple_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword
     # TODO: PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c (TEGA ŠE NISI PREGLEDAL)
     c, c_err = fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha)
 
-    print("Done!")
+    cal_results = np.array([alpha, k, c, alpha_err, k_err, c_err])
 
-    return np.array([alpha, k, c, alpha_err, k_err, c_err])
+    calibration = SimpleCalibration(cal_results, system_responses, rod_info, tub_info)
+    ask_save_cal(calibration)
+
+    return calibration
 
 
 # TODO: figure out a better way to calibrate, add script to save new or get old calibration!
 # TODO: Just temporary calibration calcualtion
-def FDM_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_list=["water"], mass=0.0001, mass_err=0.00001, freq_err=0.01,
-    complex_drift=True, plot_sys_resp=False, plot_track_results=False, rod_led_phase_correct=True, filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi):
-    
-    # THIS BIT OF CODE IS THE EXACT SAME AS ABOVE
-    # TODO: PUT THIS IN A SPECIAL FUNCTION
-    measurements = select_filter_import_data(initialdir, Iampl, Ioffs, Ifreq, keyword_list)
-    system_responses = []
-    for measrmnt in measurements:
-        sys_resp = freq_phase_ampl(measrmnt, freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift,
-                                   rod_led_phase_correct=rod_led_phase_correct, exceptable_phase_insanity=exceptable_phase_insanity)
+def FDM_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
 
-        if filter_for_wierd_phases:
-            if not sys_resp.phase_sanity_check():
-                system_responses.append(sys_resp)
-            else:
-                print("Measurement discarded because of insane phase!")
-        else:
-            system_responses.append(sys_resp)
+    kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
+    system_responses = select_and_analyse(**kwargs)
 
     # Sort system responses by frequency
     system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
 
-    # Get rod and tub info
-    rod_info = get_rod_info(initialdir=initialdir)
-    tub_info = get_tub_info(initialdir=initialdir)
+    rod_info, tub_info = guess_and_get_rod_and_tub_info([sr.meas.dirname for sr in system_responses])
 
     def construct_min_func(N):
         max_p = tub_info[1]/rod_info[3]     # TODO: OBjects with this would be so much easier and cleaner!!!
@@ -288,7 +267,8 @@ def FDM_calibration(initialdir=None, Iampl="*", Ioffs="*", Ifreq="*", keyword_li
     return minimize(min_func, np.array([5.48e-04, 2.31e-04]))
     
 
-
-
-
+def ask_save_cal(calibration):
+    ans = str(input("Do you want to save the calibratin? [Y/n] "))
+    if ans == "Y":
+        save_calibration(calibration)
 

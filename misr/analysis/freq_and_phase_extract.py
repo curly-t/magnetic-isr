@@ -8,6 +8,7 @@ import math as m
 from .ResultsClass import SingleResult
 from .import_trackdata import select_filter_import_data
 from .ResultsClass import SingleResult
+from ..utils.config import get_config
 
 
 def running_average(input_array, averaging_len):
@@ -166,3 +167,28 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
         result_dict["rod_phase"] += np.pi
 
     return SingleResult(result_dict, measrmnt, exceptable_phase_insanity)
+
+
+def select_and_analyse(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[], complex_drift=True, plot_sys_resp=False,
+                       plot_track_results=False, rod_led_phase_correct=True,
+                       filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi, freq_err=0.01):
+
+    """Returns a list of all acceptable system responses in selected direcotries"""
+
+    initialdir = get_config()[0]
+
+    measurements = select_filter_import_data(Iampl=Iampl, Ioffs=Ioffs, Ifreq=Ifreq, keyword_list=keyword_list)
+    system_responses = []
+    for measrmnt in measurements:
+        sys_resp = freq_phase_ampl(measrmnt, freq_err=freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift,
+                                   rod_led_phase_correct=rod_led_phase_correct, exceptable_phase_insanity=exceptable_phase_insanity)
+
+        if filter_for_wierd_phases:
+            if not sys_resp.phase_sanity_check():
+                system_responses.append(sys_resp)
+            else:
+                print("Measurement discarded because of insane phase!")
+        else:
+            system_responses.append(sys_resp)
+
+    return system_responses

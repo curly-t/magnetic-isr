@@ -1,5 +1,6 @@
 import numpy as np
 from tkinter.filedialog import asksaveasfilename, askopenfilename
+import pickle
 
 def save_simple_calibration(calibration_arr, rod_info, tub_info, initialdir=None):
     filepath = asksaveasfilename(initialdir=initialdir)
@@ -18,3 +19,10 @@ def get_simple_calibration(initialdir=None):
     rod_info = cal_info[6:13]
     tub_info = cal_info[13:]
     return calibration_array, rod_info, tub_info
+
+
+def save_calibration(calibration):
+    if isinstance(calibration, SimpleCalibration):
+        save_simple_calibration(calibration)
+    elif isinstance(calibration, FDMCalibration):
+        save_FDM_calibration(calibration)
