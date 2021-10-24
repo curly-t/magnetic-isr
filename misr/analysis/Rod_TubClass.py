@@ -11,7 +11,7 @@ def get_Rod_and_Tub(dirnames=None):
     return Rod(rod_info), Tub(tub_info)
 
 
-class Rod():
+class Rod:
     def __init__(self, rod_info):
         # The fields are: (every value written in each row, all in one column)
         # id, L, m, d, L_err, m_err, d_err     (id, Length, mass, diameter) (ALL IN SI units!)
@@ -24,7 +24,7 @@ class Rod():
         self.d_err = rod_info[6]
 
 
-class Tub():
+class Tub:
     def __init__(self, tub_info):
         # The fields are: (every value written in each row, all in one column)
         # id, W, h, V, W_err, h_err, V_err     (id, Width, hight, Volume (NOT total but water volume used  [SI units]))

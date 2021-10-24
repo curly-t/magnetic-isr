@@ -10,7 +10,7 @@ from .import_trackdata import select_filter_import_data
 from .num_sim_flowfield import flowfield_FDM, D_sub
 from .Rod_TubClass import get_Rod_and_Tub
 
-from .CalibrationClass import SimpleCalibration
+from .CalibrationClass import SimpleCalibration, FDMCalibration
 from ..utils.save_and_get_calibration import save_calibration
 
 
@@ -186,17 +186,12 @@ def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
 
     return c, c_err
 
-
-# System calibration coefficients are determined here.
-# This program would likely return two calibration dicts
-# One for the system properties, and one for the rod properties
-
 # GLOBALS: - TODO: fix this so you dont have to define global variables!!!
 low_border = -0.5
 high_border = 0.5
 
 
-def simple_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
+def simple_calibration(**kwargs):
     kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
 
@@ -209,13 +204,13 @@ def simple_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
     low_idx_border, high_idx_border = estimate_freq_range_borders(system_responses)
 
     # Calculate the current to force calibration constant alpha, from high freq system response
-    alpha, alpha_err = calculate_force_current_factor(system_responses[high_idx_border:], mass, mass_err)
+    alpha, alpha_err = calculate_force_current_factor(system_responses[high_idx_border:], rod.mass, rod.mass_err)
 
     # Calculate system compliance "k", for use in measurements.
     k, k_err = calculate_system_compliance(system_responses[:low_idx_border], alpha, alpha_err)
 
     # TODO: PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c (TEGA ŠE NISI PREGLEDAL)
-    c, c_err = fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha)
+    c, c_err = fitting_of_parameter_gamma_or_d(system_responses, rod.mass, k, alpha)
 
     cal_results = np.array([alpha, k, c, alpha_err, k_err, c_err])
 
@@ -225,9 +220,8 @@ def simple_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
     return calibration
 
 
-# TODO: figure out a better way to calibrate, add script to save new or get old calibration!
-# TODO: Just temporary calibration calcualtion
-def FDM_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
+def FDM_calibration(**kwargs):
+    """ STILL NOT FULLY CONVERGING!!! """
 
     kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
@@ -235,17 +229,12 @@ def FDM_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
     # Sort system responses by frequency
     system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
 
-    rod_info, tub_info = guess_and_get_rod_and_tub_info([sr.meas.dirname for sr in system_responses])
+    rod, tub = get_Rod_and_Tub([sr.meas.dirname for sr in system_responses])
 
     def construct_min_func(N):
-        max_p = tub_info[1]/rod_info[3]     # TODO: OBjects with this would be so much easier and cleaner!!!
-        L = rod_info[1]
-        a = rod_info[3]/2.  # radius of the rod
-        m = rod_info[2]
-        # TODO: INCLUDE CONFIG FILE 
-        # TODO: SET IN config file THE VISOCSITY OF WATER! KINEMATIC VISCOSITY eta = mu / rho  (mu .... Dynamic viscosity - kao true viscosity)
-        eta = 1.0034e-6     # in [m^2/s] @ 20C
-        rho = 998.2         # in [kg/m^3] @ 20C
+        max_p = np.log(tub.W/rod.d)
+        eta = 1.0034e-3     # in [Pa*s] @ 20C --> TODO: PREBERI IZ FILA
+        rho = 998.2         # in [kg/m^3] @ 20C --> TODO: PREBERI IZ FILA
 
         omegas = np.array([resp.rod_freq*2*np.pi for resp in system_responses])
         ARs = np.array([resp.AR * np.exp(1.j * resp.rod_phase) for resp in system_responses])
@@ -255,20 +244,25 @@ def FDM_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
 
             total_error = 0.
             for i, omega in enumerate(omegas):
-                Re = rho * omega * a * a / eta
+                Re = rho * omega * ((rod.d/2.)**2) / eta
                 g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
-                total_error += np.square(np.abs(alpha/(D_sub(g, omega, eta, hp, htheta, L) + k - m*omega*omega) - ARs[i]))
+                total_error += np.square(np.abs(alpha/(D_sub(g, omega, eta, hp, htheta, rod.L) + k - rod.m*omega*omega) - ARs[i]))
+            print("Trying with", alpha, k, "error:", total_error)
             return total_error
         
         return min_func
 
-    min_func = construct_min_func(30)
+    min_func = construct_min_func(20)
 
-    return minimize(min_func, np.array([5.48e-04, 2.31e-04]))
+    min_res = minimize(min_func, np.array([5.48e-04, 2.31e-04]))
+    calibration = FDMCalibration(min_res.x, system_responses, rod, tub)
+    ask_save_cal(calibration)
+
+    return calibration
     
 
 def ask_save_cal(calibration):
-    ans = str(input("Do you want to save the calibratin? [Y/n] "))
+    ans = str(input("Do you want to save the calibration? [Y/n] "))
     if ans == "Y":
         save_calibration(calibration)
 

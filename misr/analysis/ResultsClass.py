@@ -1,6 +1,6 @@
 from numpy import pi as np_pi
 
-class SingleResult():
+class SingleResult:
     def __init__(self, result_dict, measurement_object, exceptable_phase_insanity):
         # This class is used to store the results from a single measurement
         # (one date, one run, one frequency - not all frequencies of the measurement run)

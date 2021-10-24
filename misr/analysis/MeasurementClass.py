@@ -4,7 +4,7 @@ from datetime import datetime
 import re
 
 
-class Measurement():
+class Measurement:
     def __init__(self, filepath):
         # Information about the filepath, filename and filedir
         self.filepath = filepath
