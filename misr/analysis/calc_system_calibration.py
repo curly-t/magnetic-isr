@@ -8,7 +8,7 @@ from .freq_and_phase_extract import select_and_analyse
 from .import_trackdata import select_filter_import_data
 
 from .num_sim_flowfield import flowfield_FDM, D_sub
-from ..utils.get_rod_and_tub_info import guess_and_get_rod_and_tub_info
+from .Rod_TubClass import get_Rod_and_Tub
 
 from .CalibrationClass import SimpleCalibration
 from ..utils.save_and_get_calibration import save_calibration
@@ -200,7 +200,7 @@ def simple_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
     kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
 
-    rod_info, tub_info = guess_and_get_rod_and_tub_info([sr.meas.dirname for sr in system_responses])
+    rod, tub = get_Rod_and_Tub([sr.meas.dirname for sr in system_responses])
 
     # Sort system responses by frequency
     system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
@@ -219,7 +219,7 @@ def simple_calibration(mass=0.0001, mass_err=0.00001, **kwargs):
 
     cal_results = np.array([alpha, k, c, alpha_err, k_err, c_err])
 
-    calibration = SimpleCalibration(cal_results, system_responses, rod_info, tub_info)
+    calibration = SimpleCalibration(cal_results, system_responses, rod, tub)
     ask_save_cal(calibration)
 
     return calibration

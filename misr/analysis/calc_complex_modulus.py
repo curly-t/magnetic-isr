@@ -13,7 +13,6 @@ def calc_simple_complex_modulus(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=No
     # Use previous or calucalte a new calibration array --------------------------------------------------------------------
     cal_stat = str(input("Use previous calibration (type 'p') or calculate a new one (type 'n'): "))
     if cal_stat == "n":
-        # TODO: SET DEFAULT VALUES in a .config file in local direcotry OR GUESS FROM DIRECTORY NAMES!!! :)
         # TODO: MAKE OBJECTS FOR ROD, TUB and CALIBRATION!!!
         rod_info = get_rod_info(initialdir=initialdir)
         tub_info = get_tub_info(initialdir=initialdir)

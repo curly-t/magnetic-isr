@@ -1,8 +1,9 @@
 import time
 from datetime import datetime
 
+
 class SimpleCalibration():
-    def __init__(self, cal_results, sys_responses, rod_info, tub_info):
+    def __init__(self, cal_results, sys_responses, rod, tub):
         # This class is used to store the results of a simple calibration (aproximating 2nd order system)
         self.alpha = cal_results[0]
         self.k = cal_results[1]
@@ -15,8 +16,8 @@ class SimpleCalibration():
 
         self.timestamp = time.time()
 
-        self.rod_info = rod_info
-        self.tub_info = tub_info
+        self.rod = rod
+        self.tub = tub
 
     def date(self):
         return datetime.fromtimestamp(self.timestamp).strftime('%Y-%m-%d %H:%M:%S')

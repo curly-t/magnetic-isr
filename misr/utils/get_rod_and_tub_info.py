@@ -4,7 +4,8 @@ import re
 from os.path import join as path_join
 
 from .config import get_config
-    
+
+
 def get_rod_info():
     initialdir = get_config()[1]
     filepath = askopenfilename(initialdir=initialdir, title="Select Rod info file")
@@ -12,6 +13,7 @@ def get_rod_info():
     # id, L, m, d, L_err, m_err, d_err         (id, Length, mass, diameter)
     # Additional comments are saved in a comment
     return np.loadtxt(filepath)
+
 
 def get_tub_info():
     initialdir = get_config()[1]
@@ -28,11 +30,11 @@ def guess_rod_and_tub(dirnames):
 
     for dir in dirnames:
         rod_id_search = re.search("rod_\d*", dir)
-        if rod_id_search != None:
+        if rod_id_search is not None:
             rod_ids.append(int(rod_id_search[0][4:]))
 
         tub_id_search = re.search("tub_\d*", dir)
-        if tub_id_search != None:
+        if tub_id_search is not None:
             tub_ids.append(int(tub_id_search[0][4:]))
 
     rod_id = None
@@ -52,12 +54,12 @@ def guess_rod_and_tub(dirnames):
 def guess_and_get_rod_and_tub_info(dirnames):
     rod_id, tub_id = guess_rod_and_tub(dirnames)
 
-    if rod_id != None:
+    if rod_id is not None:
         rod_info = np.loadtxt(path_join(get_config()[1], "rod_{0}".format(rod_id)))
     else:
         rod_info = get_rod_info()
     
-    if tub_id != None:
+    if tub_id is not None:
         tub_info = np.loadtxt(path_join(get_config()[1], "tub_{0}".format(tub_id)))
     else:
         tub_info = get_tub_info()
