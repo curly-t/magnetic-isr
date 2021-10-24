@@ -2,8 +2,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-def plot_sr(system_responses, name=''):
-    fig, (ax_AR, ax_phase) = plt.subplots(figsize=(8, 10), ncols=1, nrows=2, sharex=True)
+def plot_sr(system_responses, name='', color='k', marker='o', fig=None, ax_AR=None, ax_phase=None):
+    print(fig, ax_AR, ax_phase)
+    if (fig is None) or (ax_AR is None) or (ax_phase is None):
+        fig, (ax_AR, ax_phase) = plt.subplots(figsize=(8, 10), ncols=1, nrows=2, sharex=True)
+
     for i in range(len(system_responses)):
         freq = system_responses[i].rod_freq
         freq_err = system_responses[i].rod_freq_err
@@ -13,9 +16,9 @@ def plot_sr(system_responses, name=''):
         phase_err = system_responses[i].rod_phase_err
 
         ax_AR.errorbar(np.log10(freq), np.log10(AR), xerr=freq_err / freq, yerr=AR_err / AR,
-                       elinewidth=1, capthick=1, capsize=2, markersize=3, marker='o', color='k')
+                       elinewidth=1, capthick=1, capsize=2, markersize=3, marker=marker, color=color)
         ax_phase.errorbar(np.log10(freq), phase, xerr=freq_err / freq, yerr=phase_err,
-                          elinewidth=1, capthick=1, capsize=2, markersize=3, marker='o', color='k')
+                          elinewidth=1, capthick=1, capsize=2, markersize=3, marker=marker, color=color)
 
     ax_AR.set_ylabel(r'$\log_{10}(AR)$   (AR [m/A])', fontsize=14)
     ax_AR.grid()
