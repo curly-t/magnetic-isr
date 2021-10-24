@@ -5,11 +5,8 @@ from scipy.optimize import curve_fit
 import warnings
 import math as m
 
-from .ResultsClass import SingleResult
 from .import_trackdata import select_filter_import_data
 from .ResultsClass import SingleResult
-from ..utils.config import get_config
-
 
 def running_average(input_array, averaging_len):
     """
@@ -174,8 +171,6 @@ def select_and_analyse(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[], complex
                        filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi, freq_err=0.01):
 
     """Returns a list of all acceptable system responses in selected direcotries"""
-
-    initialdir = get_config()[0]
 
     measurements = select_filter_import_data(Iampl=Iampl, Ioffs=Ioffs, Ifreq=Ifreq, keyword_list=keyword_list)
     system_responses = []

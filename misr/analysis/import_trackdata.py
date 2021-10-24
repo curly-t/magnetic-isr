@@ -6,7 +6,7 @@ from ..utils.config import get_config
 
 
 def select_data_dirs():
-    initialdir = get_config()[0]
+    initialdir = get_config()["meas"]
     return list(tkfilebrowser.askopendirnames(initialdir=initialdir))
 
 

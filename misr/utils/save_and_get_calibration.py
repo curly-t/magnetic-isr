@@ -5,7 +5,7 @@ import pickle
 
 
 def save_simple_calibration(calibration):
-    initialdir = get_config()[0]
+    initialdir = get_config()["cal"]
     filepath = asksaveasfilename(initialdir=initialdir, defaultextension=".simpcal")
 
     with open(filepath, "wb") as cal_file:
@@ -13,7 +13,7 @@ def save_simple_calibration(calibration):
 
     
 def get_simple_calibration():
-    initialdir = get_config()[0]
+    initialdir = get_config()["cal"]
     filepath = askopenfilename(initialdir=initialdir, filetypes=["SimpleCalibration {.simpcal}"])
 
     with open(filepath, "rb") as cal_file:
@@ -23,7 +23,7 @@ def get_simple_calibration():
 
 
 def save_FDM_calibration(calibration):
-    initialdir = get_config()[0]
+    initialdir = get_config()["cal"]
     filepath = asksaveasfilename(initialdir=initialdir, defaultextension=".fdmcal")
 
     with open(filepath, "wb") as cal_file:
@@ -31,7 +31,7 @@ def save_FDM_calibration(calibration):
 
 
 def get_fdm_calibration():
-    initialdir = get_config()[0]
+    initialdir = get_config()["cal"]
     filepath = askopenfilename(initialdir=initialdir, filetypes=["SimpleCalibration {.fdmcal}"])
 
     with open(filepath, "rb") as cal_file:

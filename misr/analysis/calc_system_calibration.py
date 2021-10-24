@@ -204,13 +204,13 @@ def simple_calibration(**kwargs):
     low_idx_border, high_idx_border = estimate_freq_range_borders(system_responses)
 
     # Calculate the current to force calibration constant alpha, from high freq system response
-    alpha, alpha_err = calculate_force_current_factor(system_responses[high_idx_border:], rod.mass, rod.mass_err)
+    alpha, alpha_err = calculate_force_current_factor(system_responses[high_idx_border:], rod.m, rod.m_err)
 
     # Calculate system compliance "k", for use in measurements.
     k, k_err = calculate_system_compliance(system_responses[:low_idx_border], alpha, alpha_err)
 
     # TODO: PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c (TEGA ŠE NISI PREGLEDAL)
-    c, c_err = fitting_of_parameter_gamma_or_d(system_responses, rod.mass, k, alpha)
+    c, c_err = fitting_of_parameter_gamma_or_d(system_responses, rod.m, k, alpha)
 
     cal_results = np.array([alpha, k, c, alpha_err, k_err, c_err])
 

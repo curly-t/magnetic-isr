@@ -66,19 +66,21 @@ def setup():
     try:
         conf_file = open(".config", "x")
     except FileExistsError:
-        ans = str(input("The config file allready exists! Do you want to overwrite it? [Y/n] "))
+        ans = str(input("The config file already exists! Do you want to overwrite it? [Y/n] "))
         if ans != "Y":
             exit()
 
     meas_dir = askopendirname(title="Select the Measurements folder")
     info_dir = askopendirname(title="Select the Info folder (Rod, Tub, ...)")
+    cal_dir = askopendirname(title="Select the Calibration folder")
 
-    print("This file contains the inforamtion needed to run scripts easier and faster.")
+    print("This file contains the inforamtion needed to run scripts easier and faster.", file=conf_file)
     print("MEAS_DIR='{0}'".format(meas_dir), file=conf_file)
     print("INFO_DIR='{0}'".format(info_dir), file=conf_file)
+    print("CAL_DIR='{0}'".format(cal_dir), file=conf_file)
 
     water_filepath = path_join(info_dir, "water_info.dat")
-    print("WATER_FILE='{0}'".format((water_filepath)), file=conf_file)
+    print("WATER_FILE='{0}'".format(water_filepath), file=conf_file)
 
     conf_file.close()
 
@@ -104,7 +106,8 @@ def get_config():
 
     meas_dir = re.search("MEAS_DIR='.*'", conf_file_contents)[0][10:-1]
     info_dir = re.search("INFO_DIR='.*'", conf_file_contents)[0][10:-1]
+    cal_dir = re.search("CAL_DIR='.*'", conf_file_contents)[0][9:-1]
     water_info = re.search("WATER_FILE='.*'", conf_file_contents)[0][12:-1]
 
-    return meas_dir, info_dir, water_info
+    return {"meas": meas_dir, "info": info_dir, "cal": cal_dir, "water": water_info}
 

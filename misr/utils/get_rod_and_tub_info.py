@@ -7,7 +7,7 @@ from .config import get_config
 
 
 def get_rod_info():
-    initialdir = get_config()[1]
+    initialdir = get_config()["info"]
     filepath = askopenfilename(initialdir=initialdir, title="Select Rod info file")
     # The fields are: (every value written in each row, all in one collumn)
     # id, L, m, d, L_err, m_err, d_err         (id, Length, mass, diameter)
@@ -16,7 +16,7 @@ def get_rod_info():
 
 
 def get_tub_info():
-    initialdir = get_config()[1]
+    initialdir = get_config()["info"]
     filepath = askopenfilename(initialdir=initialdir, title="Select Tub info file")
     # The fields are: (every value written in each row, all in one collumn)
     # id, W, h, V, W_err, h_err, V_err         (id, Width, hight, Volume (NOT total but water volume used  [SI units]))
@@ -55,12 +55,12 @@ def guess_and_get_rod_and_tub_info(dirnames):
     rod_id, tub_id = guess_rod_and_tub(dirnames)
 
     if rod_id is not None:
-        rod_info = np.loadtxt(path_join(get_config()[1], "rod_{0}".format(rod_id)))
+        rod_info = np.loadtxt(path_join(get_config()["info"], "rod_{0}".format(rod_id)))
     else:
         rod_info = get_rod_info()
     
     if tub_id is not None:
-        tub_info = np.loadtxt(path_join(get_config()[1], "tub_{0}".format(tub_id)))
+        tub_info = np.loadtxt(path_join(get_config()["info"], "tub_{0}".format(tub_id)))
     else:
         tub_info = get_tub_info()
 
