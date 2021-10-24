@@ -6,8 +6,8 @@ def number_with_comma_to_float(column):
     return bytes(column.decode("utf-8").replace(",", "."), "utf-8")
 
 
-def correct_comma_delimeter(initialdir):
-    dirs = select_data_dirs(initialdir)
+def correct_comma_delimeter():
+    dirs = select_data_dirs()
     filepaths = get_dotdat_filepaths_from_selected_dirs(dirs)
     for filepath in filepaths:
         try:
