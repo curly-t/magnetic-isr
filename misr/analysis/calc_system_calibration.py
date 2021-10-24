@@ -5,7 +5,6 @@ import warnings
 from scipy.optimize import curve_fit, minimize
 
 from .freq_and_phase_extract import select_and_analyse
-from .import_trackdata import select_filter_import_data
 
 from .num_sim_flowfield import flowfield_FDM, D_sub
 from .Rod_TubClass import get_Rod_and_Tub
@@ -13,37 +12,7 @@ from .Rod_TubClass import get_Rod_and_Tub
 from .CalibrationClass import SimpleCalibration, FDMCalibration
 from ..utils.save_and_get_calibration import save_calibration
 
-
-# MOGOČE TOLE NE SODI RAVNO SEM, ODLOČI SE KASNJE!
-def plot_system_responses(system_responses, name=''):
-    fig, (ax_AR, ax_phase) = plt.subplots(figsize=(8, 10), ncols=1, nrows=2, sharex=True)
-    for i in range(len(system_responses)):
-
-        freq = system_responses[i].rod_freq
-        freq_err = system_responses[i].rod_freq_err
-        AR = system_responses[i].AR
-        AR_err = system_responses[i].AR_err
-        phase = system_responses[i].rod_phase
-        phase_err = system_responses[i].rod_phase_err
-
-        ax_AR.errorbar(np.log10(freq), np.log10(AR), xerr=freq_err/freq, yerr=AR_err/AR,
-                       elinewidth=1, capthick=1, capsize=2, markersize=3, marker='o', color='k')
-        ax_phase.errorbar(np.log10(freq), phase, xerr=freq_err/freq, yerr=phase_err,
-                          elinewidth=1, capthick=1, capsize=2, markersize=3, marker='o', color='k')
-
-    ax_AR.set_ylabel(r'$\log_{10}(AR)$   (AR [m/A])', fontsize=14)
-    ax_AR.grid()
-
-    ax_phase.set_xlabel(r'$\log_{10}(\nu)$', fontsize=14)
-    ax_phase.set_ylabel(r'$Phase$', fontsize=14)
-    ax_phase.grid()
-
-    plt.tight_layout()
-
-    if name != '':
-        fig.savefig("System_response_for_calibration_{0}.png".format(name), dpi=300)
-    
-    return fig, ax_AR, ax_phase
+from ..plotting.plot_system_responses import plot_sr
 
 
 def estimate_freq_range_borders(system_responses):
@@ -60,7 +29,7 @@ def estimate_freq_range_borders(system_responses):
     print("Drži 'j' in klikni z miško da izbereš visokofrekvenčni plato.")
     print("Ko končaš, zapri figuro.")
 
-    fig, ax_AR, ax_phase = plot_system_responses(system_responses)
+    fig, ax_AR, ax_phase = plot_sr(system_responses)
 
     def modify_low_border(set_value):
         global low_border
@@ -102,9 +71,9 @@ def estimate_freq_range_borders(system_responses):
     high_idx_border = len(system_responses) - 1
 
     for i in range(len(system_responses) - 1):
-        if m.log10(system_responses[i+1].rod_freq) >= low_border and m.log10(system_responses[i].rod_freq) < low_border:
+        if m.log10(system_responses[i + 1].rod_freq) >= low_border > m.log10(system_responses[i].rod_freq):
             low_idx_border = i + 1
-        elif m.log10(system_responses[i+1].rod_freq) >= high_border and m.log10(system_responses[i].rod_freq) < high_border:
+        elif m.log10(system_responses[i + 1].rod_freq) >= high_border > m.log10(system_responses[i].rod_freq):
             high_idx_border = i + 1
     
     return low_idx_border, high_idx_border
@@ -179,7 +148,7 @@ def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
     c_err = m.sqrt(cov[0, 0])
 
     print("Final calibration fit!")
-    fig, ax_AR, ax_phase = plot_system_responses(system_responses)
+    fig, ax_AR, ax_phase = plot_sr(system_responses)
     ax_AR.plot(np.log10(freqs), np.log10(AR_func(freqs, c)))
     ax_phase.plot(np.log10(freqs), phase_func(freqs, c))
     plt.show()
