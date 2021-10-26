@@ -3,7 +3,6 @@ import numpy as np
 
 
 def plot_sr(system_responses, name='', color='k', marker='o', fig=None, ax_AR=None, ax_phase=None):
-    print(fig, ax_AR, ax_phase)
     if (fig is None) or (ax_AR is None) or (ax_phase is None):
         fig, (ax_AR, ax_phase) = plt.subplots(figsize=(8, 10), ncols=1, nrows=2, sharex=True)
 

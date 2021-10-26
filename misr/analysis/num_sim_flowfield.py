@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import spsolve
-from scipy.integrate import simps
+from scipy.integrate import simpson
 
 def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
     """Constructs the N x N matrix M* for solving the problem:
@@ -77,4 +77,4 @@ def dgdp_at_p_0(g, hp):
 
 
 def D_sub(g, omega, eta, hp, htheta, L):
-    return 2.j*L*omega*eta*simps(-dgdp_at_p_0(g, hp), dx=htheta)
+    return 2.j*L*omega*eta*simpson(-dgdp_at_p_0(g, hp), dx=htheta)
