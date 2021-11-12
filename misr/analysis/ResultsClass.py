@@ -5,7 +5,7 @@ class SingleResult:
         # This class is used to store the results from a single measurement
         # (one date, one run, one frequency - not all frequencies of the measurement run)
 
-        # Measurement class is linked to this single result class
+        # Measurement object is linked to this single result object
         self.meas = measurement_object
 
         # Values for rodfreq, rodampl, rodphase

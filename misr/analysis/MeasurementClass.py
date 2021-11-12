@@ -16,12 +16,13 @@ class Measurement:
         self.Ifreq = int((re.search(r"freq\d+", filepath)[0])[4:])/1000
         self.Ioffs = int((re.search(r"offs\d+", filepath)[0])[4:])/1000
         self.Iampl = int((re.search(r"ampl\d+", filepath)[0])[4:])/1000
-        self.Iampl_err = 0.0005     # Supposing a half of a mA resolution! --> PURE SPECULATION
-        self.Ioffs_err = 0.0005     # Supposing a half of a mA resolution! --> PURE SPECULATION
+        # TODO: FIND / MEASURE THESE VALUES!!! IT IS OF EXTREME IMPORTANCE TO THE ERROR ESTIMATION!!!
+        self.Iampl_err = 0.0001     # Supposing a 0.1 of a mA resolution! --> PURE SPECULATION
+        self.Ioffs_err = 0.00008     # Supposing a 0.08 of a mA resolution! --> PURE SPECULATION
         # Info on the pixel size calibartion:
         # Pixel size determines the size in real life, of one pixel on the screen. Used for conversion from pixel coords to [m]
         # pixel_size = m/pixel
-        self.pixel_size = 0.00005   # Measured pixel size!
+        self.pixel_size = 0.00005   # Measured pixel size
 
         # The trackData array is comprised of 4 columns:
         # frameIdx, frameTime, rodEdgePos, brightness

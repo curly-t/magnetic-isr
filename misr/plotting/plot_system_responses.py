@@ -29,6 +29,6 @@ def plot_sr(system_responses, name='', color='k', marker='o', fig=None, ax_AR=No
     plt.tight_layout()
 
     if name != '':
-        fig.savefig("System_response_for_calibration_{0}.png".format(name), dpi=300)
+        fig.savefig("System_response_{0}.png".format(name), dpi=300)
 
     return fig, ax_AR, ax_phase

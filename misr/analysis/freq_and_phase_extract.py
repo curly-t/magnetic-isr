@@ -66,7 +66,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     min_bright = np.min(measrmnt.brights)
     max_bright = np.max(measrmnt.brights)
 
-    # This is just an educated guess, average of 100 pixel values gives an error of a pixel_error/sqrt(100)
+    # This is just an educated guess, average of 100 pixel values gives an error of a pixel_error/sqrt(100) = \pm 1 / 10 = 0.1
     sigmas_bright = np.ones((measrmnt.numFrames, )) * 0.1
 
     try:
@@ -91,6 +91,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     
     sigmas_pos = np.ones((measrmnt.numFrames, )) * 0.5      # This is just an educated guess, one pixel precision is assumed
 
+    # TODO: FIX THIS HORRIBLE CODE BLOCK!!!!
     try:
         # First: fit just for the exact frequency, disregarding phase information
         pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, measrmnt.times, measrmnt.positions, sigma=sigmas_pos, absolute_sigma=True,
