@@ -192,7 +192,7 @@ def simple_calibration(**kwargs):
 
 
 def FDM_calibration(**kwargs):
-    """ STILL NOT FULLY CONVERGING!!! """
+    """ CONVERGING MOST OF THE TIME """
 
     kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
@@ -238,9 +238,10 @@ def FDM_calibration(**kwargs):
     # USES METHOD "lm"
     best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True)
 
-    cov = scaled_cov * np.var(min_func(best_params)) / (num_points - 2)     # As described in the leastsq docs.
+    # As described in the scipy.optimize.leastsq docs.
+    cov = scaled_cov * np.var(min_func(best_params)) / (num_points - 2)
 
-    calibration = FDMCalibration(best_params, system_responses, rod, tub)
+    calibration = FDMCalibration(best_params, cov, system_responses, rod, tub)
 
     ask_save_cal(calibration)
 

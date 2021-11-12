@@ -1,5 +1,6 @@
 import time
 from datetime import datetime
+import math as m
 
 
 class SimpleCalibration:
@@ -27,12 +28,14 @@ class SimpleCalibration:
 
 
 class FDMCalibration:
-    def __init__(self, cal_results, sys_responses, rod, tub):
+    def __init__(self, cal_results, cal_cov, sys_responses, rod, tub):
         self.alpha = cal_results[0]
         self.k = cal_results[1]
-        # TODO:
-        # self.alpha_err = cal_results[2]
-        # self.k_err = cal_results[3]
+
+        self.alpha_k_cov_matrix = cal_cov
+
+        self.alpha_err = m.sqrt(cal_cov[0, 0])
+        self.k_err = m.sqrt(cal_cov[1, 1])
 
         self.sys_resps = sys_responses
 
