@@ -4,7 +4,7 @@ from os import system
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
-from scipy.optimize import curve_fit, minimize
+from scipy.optimize import curve_fit, minimize, leastsq
 
 from .freq_and_phase_extract import select_and_analyse
 
@@ -147,7 +147,6 @@ def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
     # BOUNDS MAY BE CONSTRICTING CORRECT c PARAMETER !
     coef, cov = curve_fit(fit_func, freqs, np.concatenate([ARs, phases]), p0=[0.0001], bounds=(0.00000001, 0.01), absolute_sigma=True)
     c = coef[0]
-    print(c)
     c_err = m.sqrt(cov[0, 0])
 
     print("Final calibration fit!")
@@ -209,8 +208,6 @@ def FDM_calibration(**kwargs):
         rho = 998.2         # in [kg/m^3] @ 20C --> TODO: PREBERI IZ FILA
 
         omegas = np.array([resp.rod_freq*2*np.pi for resp in system_responses])
-        ARs = np.array([resp.AR * np.exp(1.j * resp.rod_phase) for resp in system_responses])
-        ARs_errors = np.array([(resp.AR_err/resp.AR + resp.rod_phase_err/resp.rod_phase)*ARs[i] for i, resp in enumerate(system_responses)])
 
         flowfields = np.zeros(shape=(len(omegas), N+2, N+2), dtype=np.complex128)
         for i, omega in enumerate(omegas):
@@ -222,24 +219,29 @@ def FDM_calibration(**kwargs):
         def min_func(min_param):
             alpha, k = min_param[0], min_param[1]
 
-            total_error = 0.
+            errors = np.zeros(2*len(flowfields))
             for i, omega in enumerate(omegas):
-                calculated_AR = alpha/(D_sub(flowfields[i], omega, eta, hp, htheta, rod.L) + k - rod.m*omega*omega)
-                AR_calc_error = (calculated_AR - ARs[i])
-                # RELATIVE ERROR, biased with measurements error
-                # TODO BUILD BETTER FITTING ERROR FUNCTION, MAYBE BASED ON FITTING PHASE AND AMPLITUDE SEPARATELY
-                # UTEZENO NAPAKA NA FAZI BOLI 2X toliko
-                total_error += np.square(np.abs(np.real(AR_calc_error/ARs_errors[i]))) + 2*np.square(np.abs(np.imag(AR_calc_error/ARs_errors[i])))
-            print("Trying with", alpha, k, "error:", total_error)
-            return total_error
-        
-        return min_func 
+                calculated_cplx_AR = alpha/(D_sub(flowfields[i], omega, eta, hp, htheta, rod.L) + k - rod.m*omega*omega)
+                calc_AR = np.abs(calculated_cplx_AR)
+                calc_phase = np.angle(calculated_cplx_AR)
+                AR_calc_error = np.abs(calc_AR - system_responses[i].AR)
+                phase_calc_error = np.abs(calc_phase - system_responses[i].rod_phase)
 
-    min_func = construct_min_func(30)
+                errors[i] = AR_calc_error/system_responses[i].AR_err
+                errors[len(omegas) + i] = (phase_calc_error/system_responses[i].rod_phase_err)
+            return errors
 
-    # IZGLEDA DA JE BOLJE ČE STA ZAČETNA GUESSA PREMAJHNA!! (1e-7 << 1e-5 okoli kjer pričakujemo za rod_1003)
-    min_res = minimize(min_func, np.array([1e-7, 1e-7]))
-    calibration = FDMCalibration(min_res.x, system_responses, rod, tub)
+        return min_func, len(omegas)
+
+    min_func, num_points = construct_min_func(30)
+
+    # USES METHOD "lm"
+    best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True)
+
+    cov = scaled_cov * np.var(min_func(best_params)) / (num_points - 2)     # As described in the leastsq docs.
+
+    calibration = FDMCalibration(best_params, system_responses, rod, tub)
+
     ask_save_cal(calibration)
 
     # PLOTTING ------------------------------------------------
@@ -257,7 +259,7 @@ def FDM_calibration(**kwargs):
         g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
         flowfields[i] = g
     
-    alpha, k = min_res.x[0], min_res.x[1]
+    alpha, k = best_params[0], best_params[1]
     fig, ax_AR, ax_phase = plot_sr(system_responses)
     def complex_AR(omegas):
         res = []
