@@ -78,3 +78,7 @@ def dgdp_at_p_0(g, hp):
 
 def D_sub(g, omega, eta, hp, htheta, L):
     return 2.j*L*omega*eta*simpson(-dgdp_at_p_0(g, hp), dx=htheta)
+
+
+def D_surf(g, cplxBo, omega, eta, hp, L):
+    return 2.j*L*omega*eta*cplxBo*(-dgdp_at_p_0(g[:, -1], hp))

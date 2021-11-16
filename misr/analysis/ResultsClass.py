@@ -1,5 +1,5 @@
 from numpy import pi as np_pi
-
+from numpy import array as np_array
 
 class SingleResult:
     def __init__(self, result_dict, measurement_object, exceptable_phase_insanity):
@@ -33,3 +33,4 @@ class FinalResults:
         self.G = cplx_Gs
         self.SRs = single_results
         self.cal = calibration
+        self.freqs = np_array([resp.rod_freq for resp in self.SRs])

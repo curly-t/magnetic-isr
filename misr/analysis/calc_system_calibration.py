@@ -4,7 +4,7 @@ from os import system
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
-from scipy.optimize import curve_fit, minimize, leastsq
+from scipy.optimize import curve_fit, leastsq
 
 from .freq_and_phase_extract import select_and_analyse
 
