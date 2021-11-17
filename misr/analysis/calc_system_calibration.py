@@ -243,8 +243,6 @@ def FDM_calibration(**kwargs):
 
     calibration = FDMCalibration(best_params, cov, system_responses, rod, tub)
 
-    ask_save_cal(calibration)
-
     # PLOTTING ------------------------------------------------
     N = 30
     max_p = np.log(tub.W/rod.d)
@@ -271,7 +269,9 @@ def FDM_calibration(**kwargs):
     ax_phase.plot(np.log10(omegas/(2*np.pi)), np.angle(complex_AR(omegas)))
     plt.show()
     # PLOTTING ------------------------------------------------
-    
+
+    ask_save_cal(calibration)
+
     return calibration
     
 

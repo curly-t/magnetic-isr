@@ -1,6 +1,7 @@
 from numpy import pi as np_pi
 from numpy import array as np_array
 
+
 class SingleResult:
     def __init__(self, result_dict, measurement_object, exceptable_phase_insanity):
         # This class is used to store the results from a single measurement
@@ -29,8 +30,23 @@ class SingleResult:
 
 
 class FinalResults:
-    def __init__(self, cplx_Gs, single_results, calibration):
+    def __init__(self, cplx_Gs, single_results, calibration, excluded=None, excluded_cplx_Gs=None):
         self.G = cplx_Gs
         self.SRs = single_results
         self.cal = calibration
         self.freqs = np_array([resp.rod_freq for resp in self.SRs])
+
+        if excluded is None:
+            self.excl = []
+            self.excl_freqs = np_array([])
+        else:
+            self.excl = excluded
+            self.excl_freqs = np_array([resp.rod_freq for resp in self.excl])
+
+        if excluded_cplx_Gs is None:
+            self.excl_G = []
+        else:
+            self.excl_G = excluded_cplx_Gs
+
+
+

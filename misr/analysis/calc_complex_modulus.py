@@ -17,21 +17,25 @@ def calc_simple_complex_modulus(cal, **kwargs):
         return np.arctan2(-2*np.pi*nu * cal.c, cal.k - cal.rod.m * (2*np.pi*nu)**2)
 
     # DIRECT LINEARNO ODŠTEJEŠ EFEKT SISTEMA OD EFEKTA PROTEINA - SIMPLEST CASE
-    cplx_Gs = np.zeros((len(measured_responses,)), dtype=np.complex128)
-    Bo = np.zeros((len(measured_responses),))
-    excld_ans = ""
+    included = []
+    cplx_Gs = []
+
+    excluded = []
+    excl_Gs = []
     for i, resp in enumerate(measured_responses):
-        cplx_Gs[i] = (cal.tub.W/(4.0 * cal.rod.L)) * cal.alpha * (np.exp(-1.j*resp.rod_phase) / resp.AR -
+        curr_G = (cal.tub.W/(4.0 * cal.rod.L)) * cal.alpha * (np.exp(-1.j*resp.rod_phase) / resp.AR -
                                                                             np.exp(-1.j*phase_func(resp.rod_freq)) / AR_func(resp.rod_freq))
-        Bo[i] = AR_func(resp.rod_freq) / resp.AR
+        curr_Bo = AR_func(resp.rod_freq) / resp.AR
 
-        if Bo[-1] < 100 and excld_ans == "":
-            print("WARNING - Results may be inconclusive as the Bo < 100 sometimes!")
-            excld_ans = str(input("Exclude inconclusive results? [Y/n] "))
-            if excld_ans == "Y":
-                continue
+        if curr_Bo < 100:
+            print("Excluded a result because of low Bo number!")
+            excl_Gs.append(curr_G)
+            excluded.append(measured_responses[i])
+        else:
+            cplx_Gs.append(curr_G)
+            included.append(measured_responses[i])
 
-    return FinalResults(cplx_Gs, measured_responses, cal)
+    return FinalResults(cplx_Gs, included, cal, excluded, excl_Gs)
 
 
 def calc_complex_modulus(cal, **kwargs):
@@ -44,9 +48,6 @@ def calc_complex_modulus(cal, **kwargs):
 
     rod, tub = get_Rod_and_Tub([sr.meas.dirname for sr in responses])
 
-    # STARTING Bo
-    Bo = np.ones(len(responses), dtype=np.complex128) * 10
-
     # Num points
     N = 30
 
@@ -54,23 +55,51 @@ def calc_complex_modulus(cal, **kwargs):
     eta = 1.0034e-3     # in [Pa*s] @ 20C --> TODO: PREBERI IZ FILA
     rho = 998.2         # in [kg/m^3] @ 20C --> TODO: PREBERI IZ FILA
 
-    omegas = np.array([resp.rod_freq*2*np.pi for resp in responses])
+    max_iter = 50
 
-    Bo_change_factor = np.inf
-    while np.all(np.abs(np.log10(np.abs(Bo_change_factor))) > 0.3):
-        for i, omega in enumerate(omegas):
+    Bo = []
+    omegas = []
+    included = []
+
+    excluded = []
+    Bo_excl = []
+    omegas_excl = []
+    for i, omega in enumerate([2*np.pi*resp.rod_freq for resp in responses]):
+        Bo_curr = 100. + 0.j
+        for iter_idx in range(max_iter):
             Re = rho * omega * ((rod.d / 2.) ** 2) / eta
-            g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, Bo[i], Re)
+            g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, Bo_curr, Re)
 
             calc_cplx_Foverz = (D_sub(g, omega, eta, hp, htheta, rod.L) +
-                                D_surf(g, Bo[i], omega, eta, hp, rod.L) +
+                                D_surf(g, Bo_curr, omega, eta, hp, rod.L) +
                                 cal.k - rod.m*omega*omega)
 
             Bo_change_factor = cal.alpha/(calc_cplx_Foverz * responses[i].AR * np.exp(1.j*responses[i].rod_phase))
-            Bo[i] *= Bo_change_factor
-        print("Bo:", Bo)
+            Bo_curr *= Bo_change_factor
+            print(np.square(np.real(Bo_change_factor) - 1) + np.square(np.imag(Bo_change_factor)))
+
+            if (np.square(np.real(Bo_change_factor) - 1) + np.square(np.imag(Bo_change_factor))) < np.square(0.05):
+                print("Converged!\n")
+                Bo.append(Bo_curr)
+                omegas.append(omega)
+                included.append(responses[i])
+                break
+        # If a break has occured in the for loop, the else will not compute.
+        # If the loop hasn't converged, then else will execute!
+        else:
+            print("Didn't converge!\n")
+            excluded.append(responses[i])
+            Bo_excl.append(Bo_curr)
+            omegas_excl.append(omega)
+
+    Bo = np.array(Bo)
+    omegas = np.array(omegas)
+
+    Bo_excl = np.array(Bo_excl)
+    omegas_excl = np.array(omegas_excl)
 
     # Pretvoriš iz Bo* v G
     cplx_Gs = omegas * rod.d/2 * eta * (np.real(Bo) - 1.j*np.imag(Bo))
+    excl_cplx_Gs = omegas_excl * rod.d / 2 * eta * (np.real(Bo_excl) - 1.j * np.imag(Bo_excl))
 
-    return FinalResults(cplx_Gs, responses, cal)
+    return FinalResults(cplx_Gs, included, cal, excluded, excl_cplx_Gs)
