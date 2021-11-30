@@ -2,6 +2,7 @@ import numpy as np
 import os
 from datetime import datetime
 import re
+from gvar import gvar
 
 
 class Measurement:
@@ -13,27 +14,28 @@ class Measurement:
         # Timestamp of last change (in s)
         self.timestamp_of_last_mod = os.path.getmtime(filepath)
         # Values for Ifreq, Ioffset and Iamplitude, represented in the program as Hz, and A, so as base SI units
-        self.Ifreq = int((re.search(r"freq\d+", filepath)[0])[4:])/1000
-        self.Ioffs = int((re.search(r"offs\d+", filepath)[0])[4:])/1000
-        self.Iampl = int((re.search(r"ampl\d+", filepath)[0])[4:])/1000
-        # TODO: FIND / MEASURE THESE VALUES!!! IT IS OF EXTREME IMPORTANCE TO THE ERROR ESTIMATION!!!
-        self.Iampl_err = 0.0001     # Supposing a 0.1 of a mA resolution! --> PURE SPECULATION
-        self.Ioffs_err = 0.00008     # Supposing a 0.08 of a mA resolution! --> PURE SPECULATION
-        # Info on the pixel size calibartion:
-        # Pixel size determines the size in real life, of one pixel on the screen. Used for conversion from pixel coords to [m]
+        self.Ifreq = gvar(int((re.search(r"freq\d+", filepath)[0])[4:])/1000, 0.001)
+        self.Ioffs = gvar(int((re.search(r"offs\d+", filepath)[0])[4:])/1000, 0.0008)
+        self.Iampl = gvar(int((re.search(r"ampl\d+", filepath)[0])[4:])/1000, 0.0008)
+        # FIND / MEASURE ERROR VALUES!!! IT IS OF EXTREME IMPORTANCE TO THE ERROR ESTIMATION!!!
+        # NATAN ANSWER --> cca 0.8mA of error combined!   -- tu dal pol napake Ioffs in pol Iampl
+
+        # Info on the pixel size calibration:
+        # Pixel size determines the size in real life, of one pixel on the screen.
+        # Used for conversion from pixel coordinates to [m]
         # pixel_size = m/pixel
         self.pixel_size = 0.00005   # Measured pixel size
 
         # The trackData array is comprised of 4 columns:
         # frameIdx, frameTime, rodEdgePos, brightness
-        self.trackData = np.loadtxt(filepath)
-        self.frameIdxs = self.trackData[:, 0]
-        self.times = self.trackData[:, 1]
-        self.positions = self.trackData[:, 2]
-        self.brights = self.trackData[:, 3]
+        trackData = np.loadtxt(filepath)
+        self.timeLength = trackData[-1, 1] - trackData[0, 1]
+        self.numFrames = len(trackData)
 
-        self.timeLength = self.trackData[-1, 1] - self.trackData[0, 1]
-        self.numFrames = len(self.trackData)
+        self.frameIdxs = trackData[:, 0]                                            # There can be no error in index
+        self.times = gvar(trackData[:, 1], np.ones(self.numFrames)*0.0005)          # Assuming 0.5 ms error in time
+        self.positions = gvar(trackData[:, 2], np.ones(self.numFrames)*0.5)         # Assuming half pixel of resolution
+        self.brights = gvar(trackData[:, 3], np.ones(self.numFrames)/np.sqrt(100))  # Assuming calc by 10x10 average
 
     def date_of_last_mod(self):
         return datetime.fromtimestamp(self.timestamp_of_last_mod).strftime('%Y-%m-%d %H:%M:%S')

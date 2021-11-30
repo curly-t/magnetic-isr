@@ -1,12 +1,14 @@
-from operator import pos
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 import warnings
 import math as m
+from gvar import gvar, sdev
+from gvar import mean as gvalue
 
 from .import_trackdata import select_filter_import_data
 from .ResultsClass import SingleResult
+
 
 def running_average(input_array, averaging_len):
     """
@@ -14,7 +16,7 @@ def running_average(input_array, averaging_len):
         The i-th element in the output array is the average of elements with indexs: i, i+1, i+2, ..., i + averageing_len.
         The output array is of length = len(input_array) - averageing_len + 1, because no periodic boundary is imposed on the data!
     """
-    return np.convolve(input_array, np.ones((averaging_len, ))/averaging_len, mode='valid')
+    return np.convolve(input_array, np.ones(averaging_len)/averaging_len, mode='valid')
 
 
 def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
@@ -30,7 +32,13 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
                                             The trackData array is comprised of 4 columns:
                                             frameIdx, frameTime, rodEdgePos, brightnes
 
-                                            Time is logged in seconds, and rodEdgePos in pixels. Brightness has arbitrary linear values.
+                                            Time is logged in seconds, and rodEdgePos in pixels.
+                                            Brightness has arbitrary linear values.
+
+                                            ***************************************************************************
+                                            ALWAYS USE measrmnt.positions (gvars)
+                                            instead of measrnmnt.trackData[:, 2] (floats!!!)
+                                            ***************************************************************************
 
             freq_err            --> The maximum relative discrepancy permitted between measured brihtness modulation and rod position modulation frequency.
                                     If the relative discrepancy is greater, the function returns a UserWarning
@@ -61,25 +69,32 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
         """
         return A * np.sin(2*np.pi*freq * t + phase) + const + speed * t
 
-
     # Fitting brightness data ------------------------------------------------------------------
     min_bright = np.min(measrmnt.brights)
     max_bright = np.max(measrmnt.brights)
 
-    # This is just an educated guess, average of 100 pixel values gives an error of a pixel_error/sqrt(100) = \pm 1 / 10 = 0.1
-    sigmas_bright = np.ones((measrmnt.numFrames, )) * 0.1
+    low_bound_bright = gvalue([0.5 * (max_bright - min_bright) / 2., measrmnt.Ifreq * 0.8, 0.,
+                               min_bright, -(max_bright - min_bright) / measrmnt.timeLength])
+    high_bound_bright = gvalue([1.2 * (max_bright - min_bright) / 2., measrmnt.Ifreq * 1.2, 2 * np.pi,
+                                max_bright, (max_bright - min_bright) / measrmnt.timeLength])
 
     try:
-        bright_coefs, bright_cov = curve_fit(sinusoid_w_drift, measrmnt.times, measrmnt.brights, sigma=sigmas_bright, absolute_sigma=True,
-            bounds=([0.5*(max_bright - min_bright)/2., measrmnt.Ifreq*0.8, 0., min_bright, -(max_bright - min_bright)/measrmnt.timeLength],
-                    [1.2*(max_bright - min_bright)/2., measrmnt.Ifreq*1.2, 2*np.pi, max_bright, (max_bright - min_bright)/measrmnt.timeLength]))
+        bright_coefs, bright_cov = curve_fit(sinusoid_w_drift, gvalue(measrmnt.times), gvalue(measrmnt.brights),
+                                             sigma=sdev(measrmnt.brights), absolute_sigma=True,
+                                             bounds=(low_bound_bright, high_bound_bright))
     except RuntimeError:
         print("The least squares minimization for brightness fitting failed!")
 
+    bright_coefs = gvar(bright_coefs, bright_cov)
+
     if plot_bright_results is True:
         # Display brightness result and fit
-        plt.plot(measrmnt.times, sinusoid_w_drift(measrmnt.times, *bright_coefs), label=r'Fit')
-        plt.plot(measrmnt.times, measrmnt.brights, label=r'Track result')
+        best_fit = sinusoid_w_drift(gvalue(measrmnt.times), *bright_coefs)
+        plt.plot(gvalue(measrmnt.times), gvalue(best_fit), label=r'Fit')
+        plt.fill_between(gvalue(measrmnt.times), gvalue(best_fit) - sdev(best_fit), gvalue(best_fit) + sdev(best_fit), alpha = 0.3)
+
+        plt.errorbar(gvalue(measrmnt.times), gvalue(measrmnt.brights),
+                     yerr=sdev(measrmnt.brights), label=r'Track result')
         plt.title("BRIGHT - Freq: {0}".format(measrmnt.Ifreq))
         plt.legend()
         plt.show()
@@ -88,18 +103,24 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     # Fitting rod position data ---------------------------------------------------------------
     min_pos = np.min(measrmnt.positions)
     max_pos = np.max(measrmnt.positions)
-    
-    sigmas_pos = np.ones((measrmnt.numFrames, )) * 0.5      # This is just an educated guess, one pixel precision is assumed
 
     # TODO: FIX THIS HORRIBLE CODE BLOCK!!!!
+
+    low_bound_pos = gvalue([0.5 * (max_pos - min_pos) / 2., measrmnt.Ifreq * 0.8, 0.,
+                            min_pos, -(max_pos - min_pos) / measrmnt.timeLength])
+    high_bound_pos = gvalue([1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, 2*np.pi,
+                             max_pos, (max_pos - min_pos)/measrmnt.timeLength])
+
     try:
         # First: fit just for the exact frequency, disregarding phase information
-        pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, measrmnt.times, measrmnt.positions, sigma=sigmas_pos, absolute_sigma=True,
-            bounds=([0.5*(max_pos - min_pos)/2., measrmnt.Ifreq*0.8, 0., min_pos, -(max_pos - min_pos)/measrmnt.timeLength],
-                    [1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, 2*np.pi, max_pos, (max_pos - min_pos)/measrmnt.timeLength]))
+        pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, gvalue(measrmnt.times), gvalue(measrmnt.positions),
+                                       sigma=sdev(measrmnt.positions), absolute_sigma=True,
+                                       bounds=(low_bound_pos, high_bound_pos))
+
+        pos_coefs = gvar(pos_coefs, pos_cov)
 
         # Second: correct for the undesired, complex drift
-        averaging_len = int(measrmnt.numFrames / (pos_coefs[1] * measrmnt.timeLength))
+        averaging_len = int(measrmnt.numFrames / gvalue(pos_coefs[1] * measrmnt.timeLength))
         averaging_len_good = False
         if 2 < averaging_len < 0.5*measrmnt.numFrames:      # Must be > than 2 bc otherwise the measrmnt.trackData with the offsets would be 0 long!
             averaging_len_good = True
@@ -111,8 +132,6 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
             # Third: Remove drift (from center of data)
             drift_start_offset = averaging_len//2
             drift_stop_offset = -(averaging_len - averaging_len//2) + 1
-            # print("DEBUG:", measrmnt.trackData, drift)
-            # print("drift_start_offset= {}, drift_stop_offset={}".format(drift_start_offset, drift_stop_offset))
 
             driftless_pos_data = measrmnt.positions[drift_start_offset:drift_stop_offset] - drift
             driftless_time = measrmnt.times[drift_start_offset:drift_stop_offset]
@@ -121,18 +140,29 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
             min_pos = np.min(driftless_pos_data)
             max_pos = np.max(driftless_pos_data)
 
-            # This is just an educated guess, one pixel precision is assumed (drift worsens the error)
-            sigmas_pos = np.ones((len(driftless_pos_data), )) * 1.
+            low_bound_pos = gvalue([0.5*(max_pos - min_pos)/2., measrmnt.Ifreq*0.8,
+                                    bright_coefs[2] - 2*np.pi - exceptable_phase_insanity,
+                                    min_pos, -(max_pos - min_pos)/measrmnt.timeLength])
+            high_bound_pos = gvalue([1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2,
+                                     bright_coefs[2] + exceptable_phase_insanity,
+                                     max_pos, (max_pos - min_pos)/measrmnt.timeLength])
 
             # Finally: Refit the sinusoid to the driftless_data
-            pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, driftless_time, driftless_pos_data, sigma=sigmas_pos, absolute_sigma=True,
-                bounds=([0.5*(max_pos - min_pos)/2., measrmnt.Ifreq*0.8, bright_coefs[2] - 2*np.pi - exceptable_phase_insanity, min_pos, -(max_pos - min_pos)/measrmnt.timeLength],
-                        [1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, bright_coefs[2] + exceptable_phase_insanity, max_pos, (max_pos - min_pos)/measrmnt.timeLength]))
+            pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, gvalue(driftless_time), gvalue(driftless_pos_data),
+                                           sigma=sdev(driftless_pos_data), absolute_sigma=True,
+                                           bounds=(low_bound_pos, high_bound_pos))
+
+            pos_coefs = gvar(pos_coefs, pos_cov)
 
             if plot_track_results == True:
                 # Display rod position track result and fit
-                plt.plot(driftless_time, sinusoid_w_drift(driftless_time, *pos_coefs) + drift, label=r'Fit')
-                plt.plot(measrmnt.times, measrmnt.positions, label=r'Track result')
+                best_fit = sinusoid_w_drift(gvalue(driftless_time), *pos_coefs) + drift
+                plt.plot(gvalue(driftless_time), gvalue(best_fit), label=r'Fit')
+                plt.fill_between(gvalue(driftless_time), gvalue(best_fit) - sdev(best_fit),
+                                 gvalue(best_fit) + sdev(best_fit), alpha=0.3)
+
+                plt.errorbar(gvalue(measrmnt.times), gvalue(measrmnt.positions),
+                             yerr=sdev(measrmnt.positions), label=r'Track result')
                 plt.title("Freq: {0}".format(measrmnt.Ifreq))
                 plt.legend()
                 plt.show()
@@ -140,8 +170,13 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
         else:
             if plot_track_results == True:
                 # Display rod position track result and fit
-                plt.plot(measrmnt.times, sinusoid_w_drift(measrmnt.times, *pos_coefs), label=r'Fit')
-                plt.plot(measrmnt.times, measrmnt.positions, label=r'Track result')
+                best_fit = sinusoid_w_drift(gvalue(measrmnt.times), *pos_coefs)
+                plt.plot(gvalue(measrmnt.times), gvalue(best_fit), label=r'Fit')
+                plt.fill_between(gvalue(measrmnt.times), gvalue(best_fit) - sdev(best_fit),
+                                 gvalue(best_fit) + sdev(best_fit), alpha=0.3)
+
+                plt.errorbar(gvalue(measrmnt.times), gvalue(measrmnt.positions),
+                             yerr=sdev(measrmnt.positions), label=r'Track result')
                 plt.title("Freq: {0}".format(measrmnt.Ifreq))
                 plt.legend()
                 plt.show()
@@ -151,13 +186,12 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     # -----------------------------------------------------------------------------------------
     
     # Check for frequency discrepancy
-    if m.fabs((bright_coefs[1] - pos_coefs[1])/bright_coefs[1]) >= freq_err :
+    relative_discrep = gvalue((bright_coefs[1] - pos_coefs[1])/bright_coefs[1])
+    if m.fabs(relative_discrep) >= freq_err:
         warnings.warn("Relativna razlika v frekvencah dobljenih iz brightness data in position data je vecja od {0}".format(freq_err) +
         "\nBrightness freq: {0}\nPosition freq: {1}".format(bright_coefs[1], pos_coefs[1]))
 
-    result_dict = {"rod_freq": pos_coefs[1], "rod_freq_err": m.sqrt(pos_cov[1, 1]),
-                    "rod_ampl": pos_coefs[0], "rod_ampl_err": m.sqrt(pos_cov[0, 0]),
-                    "rod_phase": pos_coefs[2] - bright_coefs[2], "rod_phase_err": m.sqrt(bright_cov[2, 2]) + m.sqrt(pos_cov[2, 2])}   # PREDPOSTAVKA DA KR SEŠTEJEŠ SIGME     
+    result_dict = {"rod_freq": pos_coefs[1], "rod_ampl": pos_coefs[0], "rod_phase": pos_coefs[2] - bright_coefs[2]}
 
     # BECAUSE PHASE OF THE ROD AND PHASE OF THE LED ARE RECORDED DIFFERENTLY - THERE APPEARS AN ADDITIONAL 180 PHASE DIFFERENCE
     # CORRECT FOR PHASE DIFFERENCE
@@ -168,7 +202,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
 
 
 def select_and_analyse(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[], complex_drift=True, plot_sys_resp=False,
-                       plot_track_results=False, rod_led_phase_correct=True,
+                       plot_track_results=False, plot_bright_results=False, rod_led_phase_correct=True,
                        filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi, freq_err=0.01):
 
     """Returns a list of all acceptable system responses in selected direcotries"""
@@ -176,7 +210,8 @@ def select_and_analyse(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[], complex
     measurements = select_filter_import_data(Iampl=Iampl, Ioffs=Ioffs, Ifreq=Ifreq, keyword_list=keyword_list)
     system_responses = []
     for measrmnt in measurements:
-        sys_resp = freq_phase_ampl(measrmnt, freq_err=freq_err, plot_track_results=plot_track_results, complex_drift=complex_drift,
+        sys_resp = freq_phase_ampl(measrmnt, freq_err=freq_err, plot_track_results=plot_track_results,
+                                   plot_bright_results=plot_bright_results, complex_drift=complex_drift,
                                    rod_led_phase_correct=rod_led_phase_correct, exceptable_phase_insanity=exceptable_phase_insanity)
 
         if filter_for_wierd_phases:
