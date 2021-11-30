@@ -1,10 +1,10 @@
-import enum
 import math as m
-from os import system
 import numpy as np
 import matplotlib.pyplot as plt
 import warnings
 from scipy.optimize import curve_fit, leastsq
+from gvar import mean as gvalue
+from gvar import sdev, gvar
 
 from .freq_and_phase_extract import select_and_analyse
 
@@ -73,69 +73,61 @@ def estimate_freq_range_borders(system_responses):
     high_idx_border = len(system_responses) - 1
 
     for i in range(len(system_responses) - 1):
-        if m.log10(system_responses[i + 1].rod_freq) >= low_border > m.log10(system_responses[i].rod_freq):
+        if m.log10(gvalue(system_responses[i + 1].rod_freq)) >= low_border > m.log10(gvalue(system_responses[i].rod_freq)):
             low_idx_border = i + 1
-        elif m.log10(system_responses[i + 1].rod_freq) >= high_border > m.log10(system_responses[i].rod_freq):
+        elif m.log10(gvalue(system_responses[i + 1].rod_freq)) >= high_border > m.log10(gvalue(system_responses[i].rod_freq)):
             high_idx_border = i + 1
     
     return low_idx_border, high_idx_border
 
 
-def calculate_force_current_factor(high_freq_system_responses, mass, mass_err, normal_power_tol=1):
+def calculate_force_current_factor(high_freq_system_responses, mass, normal_power_tol=1):
     # Construct arrays for line fitting
-    ARs = [sys_resp.AR for sys_resp in high_freq_system_responses]
-    AR_errs = [sys_resp.AR_err for sys_resp in high_freq_system_responses]
-    freqs = [sys_resp.rod_freq for sys_resp in high_freq_system_responses]
+    log10ARs = np.log([sys_resp.AR for sys_resp in high_freq_system_responses])/np.log(10)
+    log10freqs = np.log([sys_resp.rod_freq for sys_resp in high_freq_system_responses])/np.log(10)
 
     # Fit a line trough the high frequency regime data points
     # Error is returned unscaled, wights must satisfy: weights = 1/sigma**2
-    high_freq_AR_coefs, high_freq_AR_cov = np.polyfit(np.log10(freqs), np.log10(ARs),
+    high_freq_AR_coefs, high_freq_AR_cov = np.polyfit(gvalue(log10freqs), gvalue(log10ARs),
                                                       deg=1,
-                                                      w=np.square(m.log(10) * np.array(ARs) / np.array(AR_errs)),
+                                                      w=1. / np.square(sdev(log10ARs)),
                                                       cov='unscaled')
-    if (high_freq_AR_coefs[0] + 2)/m.sqrt(high_freq_AR_cov[0, 0]) >= normal_power_tol:
-        warnings.warn("Potencna odvisnost omege pri visokih frekvencah je {0:2.3f} ({1:2.3e})!".format(high_freq_AR_coefs[0], m.sqrt(high_freq_AR_cov[0, 0])))
+
+    high_freq_AR_coefs = gvar(high_freq_AR_coefs, high_freq_AR_cov)
+
+    if gvalue((high_freq_AR_coefs[0] + 2)/m.sqrt(high_freq_AR_cov[0, 0])) >= normal_power_tol:
+        warnings.warn(f"Potencna odvisnost omege pri visokih frekvencah je {high_freq_AR_coefs[0]}!")
     
     # Intermediate constant, A = alpha/(4*m*pi**2)
-    A = m.pow(10, high_freq_AR_coefs[1])
+    A = 10**(high_freq_AR_coefs[1])
     
-    # Final current to force converting constant alpha, a property of the rod. Alpha [N/A]
+    # Final current to force converting constant alpha, a property of the rod - alpha is in units [N/A]
     alpha = 4. * (np.pi ** 2) * mass * A
 
-    # Intermediate error calculation step
-    A_err = m.log(10) * A * m.sqrt(high_freq_AR_cov[1, 1])
-
-    # Final error for current to force converting constant alpha.
-    alpha_err = (mass_err/mass + A_err/A) * alpha
-
-    return alpha, alpha_err
+    return alpha
 
 
-def calculate_system_compliance(low_freq_system_responses, alpha, alpha_err):
+def calculate_system_compliance(low_freq_system_responses, alpha):
     ARs = [sys_resp.AR for sys_resp in low_freq_system_responses]
-    AR_errs = [sys_resp.AR_err for sys_resp in low_freq_system_responses]
 
     # Optimal combination of ARs is to weight them by weights = 1./sigma**2 (Wikipedia)
-    AR_avg = np.average(ARs, weights=1./np.square(AR_errs))
-    # Wikipedia: sigma_wighted_average_AR = 1 / (sqrt(sum(weights)))
-    AR_avg_err = 1./(m.sqrt(np.sum(1./np.square(AR_errs))))
+    weights = 1./np.square(sdev(ARs))
+    AR_avg = np.sum(weights * ARs)/np.sum(weights)
 
     # k is calculated as the low freq plateau value of alpha / AR
     k = alpha / AR_avg
 
-    # And k_err is a sum of two relative errors * the absolute value of k
-    k_err = (AR_avg_err/AR_avg + alpha_err/alpha) * k
-
-    return k, k_err
+    return k
 
 
 def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
-
+    # Zavestno smo se odločili in tu upoštevali MEANS of k and mass, ker bi blo sicer težko vključit v curve_fit!
+    # In itak je simple calibration le proof of concept, ni treba da je dejst natančno, uporabljalo bi se potem FDM star
     def AR_func(nu, c):
-        return alpha/(np.sqrt((c * 2*np.pi*nu)**2 + (k - mass * 4.*np.pi*np.pi*nu*nu)**2))
+        return gvalue(alpha)/(np.sqrt((c * 2*np.pi*nu)**2 + (gvalue(k) - gvalue(mass) * 4.*np.pi*np.pi*nu*nu)**2))
 
     def phase_func(nu, c):
-        return np.arctan2(-2*np.pi*nu * c, k - mass * (2*np.pi*nu)**2)
+        return np.arctan2(-2*np.pi*nu * c, gvalue(k) - gvalue(mass) * (2*np.pi*nu)**2)
 
     def fit_func(nu, c):
         return np.concatenate([AR_func(nu, c), phase_func(nu, c)])
@@ -144,20 +136,33 @@ def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
     phases = np.array([sys_resp.rod_phase for sys_resp in system_responses])
     freqs = np.array([sys_resp.rod_freq for sys_resp in system_responses])
 
-    # BOUNDS MAY BE CONSTRICTING CORRECT c PARAMETER !
-    coef, cov = curve_fit(fit_func, freqs, np.concatenate([ARs, phases]), p0=[0.0001], bounds=(0.00000001, 0.01), absolute_sigma=True)
+    # BOUNDS MAY BE CONSTRICTING CORRECT c PARAMETER!
+    coef, cov = curve_fit(fit_func, gvalue(freqs), gvalue(np.concatenate([ARs, phases])), p0=[0.0001],
+                          bounds=(0.00000001, 0.01), absolute_sigma=True, sigma=sdev(np.concatenate([ARs, phases])))
+    coef = gvar(coef, cov)
     c = coef[0]
-    c_err = m.sqrt(cov[0, 0])
 
     print("Final calibration fit!")
     fig, ax_AR, ax_phase = plot_sr(system_responses)
-    ax_AR.plot(np.log10(freqs), np.log10(AR_func(freqs, c)))
-    ax_phase.plot(np.log10(freqs), phase_func(freqs, c))
+    AR_best_fit = np.log(AR_func(freqs, c))/np.log(10)
+    ax_AR.plot(np.log10(gvalue(freqs)), gvalue(AR_best_fit))
+    ax_AR.fill_between(np.log10(gvalue(freqs)),
+                       gvalue(AR_best_fit) - sdev(AR_best_fit),
+                       gvalue(AR_best_fit) + sdev(AR_best_fit),
+                       alpha=0.3)
+
+    phase_best_fit = phase_func(freqs, c)
+    ax_phase.plot(np.log10(gvalue(freqs)), gvalue(phase_best_fit))
+    ax_phase.fill_between(np.log10(gvalue(freqs)),
+                          gvalue(phase_best_fit) - sdev(phase_best_fit),
+                          gvalue(phase_best_fit) + sdev(phase_best_fit),
+                          alpha=0.3)
     plt.show()
 
-    return c, c_err
+    return c
 
-# GLOBALS: - TODO: fix this so you dont have to define global variables!!!
+
+# GLOBALS: - TODO: fix this so you don't have to define global variables!!!
 low_border = -0.5
 high_border = 0.5
 
@@ -169,21 +174,20 @@ def simple_calibration(**kwargs):
     rod, tub = get_Rod_and_Tub([sr.meas.dirname for sr in system_responses])
 
     # Sort system responses by frequency
-    system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
+    system_responses = sorted(system_responses, key=lambda sys_resp: gvalue(sys_resp.rod_freq))
 
     # Manually estimate freq range borders for low and high frequency regimes
     low_idx_border, high_idx_border = estimate_freq_range_borders(system_responses)
 
     # Calculate the current to force calibration constant alpha, from high freq system response
-    alpha, alpha_err = calculate_force_current_factor(system_responses[high_idx_border:], rod.m, rod.m_err)
+    alpha = calculate_force_current_factor(system_responses[high_idx_border:], rod.m)
 
     # Calculate system compliance "k", for use in measurements.
-    k, k_err = calculate_system_compliance(system_responses[:low_idx_border], alpha, alpha_err)
+    k = calculate_system_compliance(system_responses[:low_idx_border], alpha)
 
-    # TODO: PREGLEJ ČE DELUJE VREDU OCENA NAPAKE c (TEGA ŠE NISI PREGLEDAL)
-    c, c_err = fitting_of_parameter_gamma_or_d(system_responses, rod.m, k, alpha)
+    c = fitting_of_parameter_gamma_or_d(system_responses, rod.m, k, alpha)
 
-    cal_results = np.array([alpha, k, c, alpha_err, k_err, c_err])
+    cal_results = np.array([alpha, k, c])
 
     calibration = SimpleCalibration(cal_results, system_responses, rod, tub)
     ask_save_cal(calibration)
@@ -192,26 +196,27 @@ def simple_calibration(**kwargs):
 
 
 def FDM_calibration(**kwargs):
-    """ CONVERGING MOST OF THE TIME """
+    """ NOT CONVERGING TILL THE GVAR IMPLEMENTATION! """
 
     kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
 
     # Sort system responses by frequency
-    system_responses = sorted(system_responses, key=lambda sys_resp: sys_resp.rod_freq)
+    system_responses = sorted(system_responses, key=lambda sys_resp: gvalue(sys_resp.rod_freq))
 
     rod, tub = get_Rod_and_Tub([sr.meas.dirname for sr in system_responses])
 
     def construct_min_func(N):
-        max_p = np.log(tub.W/rod.d)
+        max_p = gvalue(np.log(tub.W/rod.d))
         eta = 1.0034e-3     # in [Pa*s] @ 20C --> TODO: PREBERI IZ FILA
         rho = 998.2         # in [kg/m^3] @ 20C --> TODO: PREBERI IZ FILA
 
-        omegas = np.array([resp.rod_freq*2*np.pi for resp in system_responses])
+        # Beware - omegas are just floats, is easier.
+        omegas = gvalue(np.array([resp.rod_freq*2*np.pi for resp in system_responses]))
 
         flowfields = np.zeros(shape=(len(omegas), N+2, N+2), dtype=np.complex128)
         for i, omega in enumerate(omegas):
-            Re = rho * omega * ((rod.d/2.)**2) / eta
+            Re = rho * omega * ((gvalue(rod.d)/2.)**2) / eta    # Zaradi simulacije delamo z float in ne gvar samo tu.
             g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
             flowfields[i] = g
             # ps, thetas, hp in htheta pa bodo vedno enaki, zato bodo tudi po zadnji iteraciji vredu za uporabo naprej v funkciji
@@ -221,14 +226,23 @@ def FDM_calibration(**kwargs):
 
             errors = np.zeros(2*len(flowfields))
             for i, omega in enumerate(omegas):
-                calculated_cplx_AR = alpha/(D_sub(flowfields[i], omega, eta, hp, htheta, rod.L) + k - rod.m*omega*omega)
-                calc_AR = np.abs(calculated_cplx_AR)
-                calc_phase = np.angle(calculated_cplx_AR)
-                AR_calc_error = np.abs(calc_AR - system_responses[i].AR)
-                phase_calc_error = np.abs(calc_phase - system_responses[i].rod_phase)
+                D_sub_real, D_sub_imag = D_sub(flowfields[i], omega, eta, hp, htheta, rod.L)
 
-                errors[i] = AR_calc_error/system_responses[i].AR_err
-                errors[len(omegas) + i] = (phase_calc_error/system_responses[i].rod_phase_err)
+                calc_imag_AR = - alpha/D_sub_imag       # Because i**(-1) = -i
+                calc_real_AR = alpha/(D_sub_real + k - rod.m*omega*omega)
+
+                calc_AR = np.sqrt(np.square(calc_real_AR) + np.square(calc_imag_AR))
+                calc_phase = np.arctan2(calc_imag_AR, calc_real_AR)
+
+                # Takle glupo morem delat ker gvar ne podpira np.abs()
+                AR_calc_error = np.sqrt(np.square(calc_AR - system_responses[i].AR))
+                phase_calc_error = np.sqrt(np.square(calc_phase - system_responses[i].rod_phase))
+
+                # FOLLOWING CHANGE MAY ALSO CAUSE INSTABILITY; BUT SHOULD BE MORE TRUE!
+                # errors[i] = AR_calc_error/sdev(system_responses[i].AR)
+                # errors[len(omegas) + i] = phase_calc_error/sdev(system_responses[i].rod_phase)
+                errors[i] = gvalue(AR_calc_error / sdev(AR_calc_error))
+                errors[len(omegas) + i] = gvalue(phase_calc_error/sdev(phase_calc_error))
             return errors
 
         return min_func, len(omegas)
@@ -240,33 +254,51 @@ def FDM_calibration(**kwargs):
 
     # As described in the scipy.optimize.leastsq docs.
     cov = scaled_cov * np.var(min_func(best_params)) / (num_points - 2)
+    best_params = gvar(best_params, cov)
 
-    calibration = FDMCalibration(best_params, cov, system_responses, rod, tub)
+    calibration = FDMCalibration(best_params, system_responses, rod, tub)
 
     # PLOTTING ------------------------------------------------
     N = 30
-    max_p = np.log(tub.W/rod.d)
+    max_p = gvalue(np.log(tub.W/rod.d))
     eta = 1.0034e-3     # in [Pa*s] @ 20C --> TODO: PREBERI IZ FILA
     rho = 998.2         # in [kg/m^3] @ 20C --> TODO: PREBERI IZ FILA
 
-    omegas = np.array([resp.rod_freq*2*np.pi for resp in system_responses])
-    ARs = np.array([resp.AR * np.exp(1.j * resp.rod_phase) for resp in system_responses])
+    omegas = gvalue(np.array([resp.rod_freq*2*np.pi for resp in system_responses]))
 
     flowfields = np.zeros(shape=(len(omegas), N+2, N+2), dtype=np.complex128)
     for i, omega in enumerate(omegas):
-        Re = rho * omega * ((rod.d/2.)**2) / eta
+        Re = rho * omega * ((gvalue(rod.d)/2.)**2) / eta
         g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
         flowfields[i] = g
     
     alpha, k = best_params[0], best_params[1]
     fig, ax_AR, ax_phase = plot_sr(system_responses)
-    def complex_AR(omegas):
+    def calculated_ARs_and_phases(omegas):
         res = []
         for i, omega in enumerate(omegas):
-            res.append(alpha/(D_sub(flowfields[i], omega, eta, hp, htheta, rod.L) + k - rod.m*omega*omega))
-        return res
-    ax_AR.plot(np.log10(omegas/(2*np.pi)), np.log10(np.abs(complex_AR(omegas))))
-    ax_phase.plot(np.log10(omegas/(2*np.pi)), np.angle(complex_AR(omegas)))
+            D_sub_real, D_sub_imag = D_sub(flowfields[i], omega, eta, hp, htheta, rod.L)
+            calc_imag_AR = - alpha / D_sub_imag  # Because i**(-1) = -i
+            calc_real_AR = alpha / (D_sub_real + k - rod.m * omega * omega)
+
+            calc_AR = np.sqrt(np.square(calc_real_AR) + np.square(calc_imag_AR))
+            calc_phase = np.arctan2(calc_imag_AR, calc_real_AR)
+
+            res.append(np.array([calc_AR, calc_phase]))
+        res = np.array(res)
+        return res[:, 0], res[:, 1]
+
+    calc_ARs, calc_phases = calculated_ARs_and_phases(omegas)
+    ax_AR.plot(np.log10(omegas/(2*np.pi)), gvalue(np.log(calc_ARs)/np.log(10)))
+    ax_AR.fill_between(np.log10(omegas/(2*np.pi)),
+                       gvalue(np.log(calc_ARs)/np.log(10)) - sdev(np.log(calc_ARs)/np.log(10)),
+                       gvalue(np.log(calc_ARs)/np.log(10)) + sdev(np.log(calc_ARs)/np.log(10)),
+                       alpha=0.3)
+    ax_phase.plot(np.log10(omegas/(2*np.pi)), gvalue(calc_phases))
+    ax_phase.fill_between(np.log10(omegas/(2*np.pi)),
+                          gvalue(calc_phases) - sdev(calc_phases),
+                          gvalue(calc_phases) + sdev(calc_phases),
+                          alpha=0.3)
     plt.show()
     # PLOTTING ------------------------------------------------
 

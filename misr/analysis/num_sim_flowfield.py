@@ -77,8 +77,11 @@ def dgdp_at_p_0(g, hp):
 
 
 def D_sub(g, omega, eta, hp, htheta, L):
-    return 2.j*L*omega*eta*simpson(-dgdp_at_p_0(g, hp), dx=htheta)
+    integral = simpson(-dgdp_at_p_0(g, hp), dx=htheta)
+    # Returns separately the (real, imaginary) pair of arrays.
+    return -2*L*omega*eta*np.imag(integral), 2*L*omega*eta*np.real(integral)
 
 
 def D_surf(g, cplxBo, omega, eta, hp, L):
-    return 2.j*L*omega*eta*cplxBo*(-dgdp_at_p_0(g[:, -1], hp))
+    # The true equation is than:   D_surf = D_surf_not_cplx * 1.j
+    return 2*L*omega*eta*cplxBo*(-dgdp_at_p_0(g[:, -1], hp))

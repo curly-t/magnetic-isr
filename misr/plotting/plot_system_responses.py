@@ -1,5 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from gvar import sdev
+from gvar import mean as gvalue
 
 
 def plot_sr(system_responses, name='', color='k', marker='o', fig=None, ax_AR=None, ax_phase=None):
@@ -7,16 +9,13 @@ def plot_sr(system_responses, name='', color='k', marker='o', fig=None, ax_AR=No
         fig, (ax_AR, ax_phase) = plt.subplots(figsize=(8, 10), ncols=1, nrows=2, sharex=True)
 
     for i in range(len(system_responses)):
-        freq = system_responses[i].rod_freq
-        freq_err = system_responses[i].rod_freq_err
-        AR = system_responses[i].AR
-        AR_err = system_responses[i].AR_err
+        log10freq = np.log(system_responses[i].rod_freq)/np.log(10)
+        log10AR = np.log(system_responses[i].AR)/np.log(10)
         phase = system_responses[i].rod_phase
-        phase_err = system_responses[i].rod_phase_err
 
-        ax_AR.errorbar(np.log10(freq), np.log10(AR), xerr=freq_err / freq, yerr=AR_err / AR,
+        ax_AR.errorbar(gvalue(log10freq), gvalue(log10AR), xerr=sdev(log10freq), yerr=sdev(log10AR),
                        elinewidth=1, capthick=1, capsize=2, markersize=3, marker=marker, color=color)
-        ax_phase.errorbar(np.log10(freq), phase, xerr=freq_err / freq, yerr=phase_err,
+        ax_phase.errorbar(gvalue(log10freq), gvalue(phase), xerr=sdev(log10freq), yerr=sdev(phase),
                           elinewidth=1, capthick=1, capsize=2, markersize=3, marker=marker, color=color)
 
     ax_AR.set_ylabel(r'$\log_{10}(AR)$   (AR [m/A])', fontsize=14)

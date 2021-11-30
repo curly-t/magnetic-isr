@@ -9,9 +9,6 @@ class SimpleCalibration:
         self.alpha = cal_results[0]
         self.k = cal_results[1]
         self.c = cal_results[2]
-        self.alpha_err = cal_results[3]
-        self.k_err = cal_results[4]
-        self.c_err = cal_results[5]
 
         self.sys_resps = sys_responses
 
@@ -28,14 +25,9 @@ class SimpleCalibration:
 
 
 class FDMCalibration:
-    def __init__(self, cal_results, cal_cov, sys_responses, rod, tub):
+    def __init__(self, cal_results, sys_responses, rod, tub):
         self.alpha = cal_results[0]
         self.k = cal_results[1]
-
-        self.alpha_k_cov_matrix = cal_cov
-
-        self.alpha_err = m.sqrt(cal_cov[0, 0])
-        self.k_err = m.sqrt(cal_cov[1, 1])
 
         self.sys_resps = sys_responses
 
