@@ -14,7 +14,7 @@ from .Rod_TubClass import get_Rod_and_Tub
 from .CalibrationClass import SimpleCalibration, FDMCalibration
 from ..utils.save_and_get_calibration import save_calibration
 
-from ..plotting.plot_system_responses import plot_sr
+from ..plotting.plot_system_responses import plot_sr, plot_fit_results_pointwise, plot_FDM_cal_fit
 
 
 def estimate_freq_range_borders(system_responses):
@@ -143,20 +143,10 @@ def fitting_of_parameter_gamma_or_d(system_responses, mass, k, alpha):
     c = coef[0]
 
     print("Final calibration fit!")
+    ARs = AR_func(freqs, c)
+    phases = phase_func(freqs, c)
     fig, ax_AR, ax_phase = plot_sr(system_responses)
-    AR_best_fit = np.log(AR_func(freqs, c))/np.log(10)
-    ax_AR.plot(np.log10(gvalue(freqs)), gvalue(AR_best_fit))
-    ax_AR.fill_between(np.log10(gvalue(freqs)),
-                       gvalue(AR_best_fit) - sdev(AR_best_fit),
-                       gvalue(AR_best_fit) + sdev(AR_best_fit),
-                       alpha=0.3)
-
-    phase_best_fit = phase_func(freqs, c)
-    ax_phase.plot(np.log10(gvalue(freqs)), gvalue(phase_best_fit))
-    ax_phase.fill_between(np.log10(gvalue(freqs)),
-                          gvalue(phase_best_fit) - sdev(phase_best_fit),
-                          gvalue(phase_best_fit) + sdev(phase_best_fit),
-                          alpha=0.3)
+    plot_fit_results_pointwise(fig, ax_AR, ax_phase, ARs, phases, freqs)
     plt.show()
 
     return c
@@ -228,8 +218,10 @@ def FDM_calibration(**kwargs):
             for i, omega in enumerate(omegas):
                 D_sub_real, D_sub_imag = D_sub(flowfields[i], omega, eta, hp, htheta, rod.L)
 
-                calc_imag_AR = - alpha/D_sub_imag       # Because i**(-1) = -i
-                calc_real_AR = alpha/(D_sub_real + k - rod.m*omega*omega)
+                D_re = D_sub_real + k - rod.m * omega * omega
+                D_im = D_sub_imag
+                calc_imag_AR = - alpha * D_im / (np.square(D_im) + np.square(D_re))
+                calc_real_AR = alpha * D_re / (np.square(D_im) + np.square(D_re))
 
                 calc_AR = np.sqrt(np.square(calc_real_AR) + np.square(calc_imag_AR))
                 calc_phase = np.arctan2(calc_imag_AR, calc_real_AR)
@@ -245,62 +237,23 @@ def FDM_calibration(**kwargs):
                 errors[len(omegas) + i] = gvalue(phase_calc_error/sdev(phase_calc_error))
             return errors
 
-        return min_func, len(omegas)
+        return min_func, omegas
 
-    min_func, num_points = construct_min_func(30)
+    min_func, omegas = construct_min_func(30)
 
     # USES METHOD "lm"
     best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True)
 
     # As described in the scipy.optimize.leastsq docs.
-    cov = scaled_cov * np.var(min_func(best_params)) / (num_points - 2)
+    cov = scaled_cov * np.var(min_func(best_params)) / (len(omegas) - 2)
     best_params = gvar(best_params, cov)
 
     calibration = FDMCalibration(best_params, system_responses, rod, tub)
 
-    # PLOTTING ------------------------------------------------
-    N = 30
-    max_p = gvalue(np.log(tub.W/rod.d))
-    eta = 1.0034e-3     # in [Pa*s] @ 20C --> TODO: PREBERI IZ FILA
-    rho = 998.2         # in [kg/m^3] @ 20C --> TODO: PREBERI IZ FILA
-
-    omegas = gvalue(np.array([resp.rod_freq*2*np.pi for resp in system_responses]))
-
-    flowfields = np.zeros(shape=(len(omegas), N+2, N+2), dtype=np.complex128)
-    for i, omega in enumerate(omegas):
-        Re = rho * omega * ((gvalue(rod.d)/2.)**2) / eta
-        g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
-        flowfields[i] = g
-    
-    alpha, k = best_params[0], best_params[1]
+    # Plotting
     fig, ax_AR, ax_phase = plot_sr(system_responses)
-    def calculated_ARs_and_phases(omegas):
-        res = []
-        for i, omega in enumerate(omegas):
-            D_sub_real, D_sub_imag = D_sub(flowfields[i], omega, eta, hp, htheta, rod.L)
-            calc_imag_AR = - alpha / D_sub_imag  # Because i**(-1) = -i
-            calc_real_AR = alpha / (D_sub_real + k - rod.m * omega * omega)
-
-            calc_AR = np.sqrt(np.square(calc_real_AR) + np.square(calc_imag_AR))
-            calc_phase = np.arctan2(calc_imag_AR, calc_real_AR)
-
-            res.append(np.array([calc_AR, calc_phase]))
-        res = np.array(res)
-        return res[:, 0], res[:, 1]
-
-    calc_ARs, calc_phases = calculated_ARs_and_phases(omegas)
-    ax_AR.plot(np.log10(omegas/(2*np.pi)), gvalue(np.log(calc_ARs)/np.log(10)))
-    ax_AR.fill_between(np.log10(omegas/(2*np.pi)),
-                       gvalue(np.log(calc_ARs)/np.log(10)) - sdev(np.log(calc_ARs)/np.log(10)),
-                       gvalue(np.log(calc_ARs)/np.log(10)) + sdev(np.log(calc_ARs)/np.log(10)),
-                       alpha=0.3)
-    ax_phase.plot(np.log10(omegas/(2*np.pi)), gvalue(calc_phases))
-    ax_phase.fill_between(np.log10(omegas/(2*np.pi)),
-                          gvalue(calc_phases) - sdev(calc_phases),
-                          gvalue(calc_phases) + sdev(calc_phases),
-                          alpha=0.3)
+    plot_FDM_cal_fit(fig, ax_AR, ax_phase, best_params[0], best_params[1], omegas/(2*np.pi), rod, tub)
     plt.show()
-    # PLOTTING ------------------------------------------------
 
     ask_save_cal(calibration)
 

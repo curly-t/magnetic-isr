@@ -83,5 +83,4 @@ def D_sub(g, omega, eta, hp, htheta, L):
 
 
 def D_surf(g, cplxBo, omega, eta, hp, L):
-    # The true equation is than:   D_surf = D_surf_not_cplx * 1.j
-    return 2*L*omega*eta*cplxBo*(-dgdp_at_p_0(g[:, -1], hp))
+    return 2.j*L*omega*eta*cplxBo*(-dgdp_at_p_0(g[:, -1], hp))
