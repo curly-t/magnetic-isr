@@ -5,25 +5,33 @@ from gvar import mean as gvalue
 from ..analysis.num_sim_flowfield import flowfield_FDM, D_sub
 
 
-def plot_sr(system_responses, name='', color='k', marker='o', fig=None, ax_AR=None, ax_phase=None):
+def plot_sr(system_responses, name='', color='k', marker='o', label=None, fig=None, ax_AR=None, ax_phase=None):
     if (fig is None) or (ax_AR is None) or (ax_phase is None):
         fig, (ax_AR, ax_phase) = plt.subplots(figsize=(8, 10), ncols=1, nrows=2, sharex=True)
+
+    plot_params = {"elinewidth": 1, "capthick": 1, "capsize": 2, "markersize": 3, "marker": marker, "color": color}
 
     for i in range(len(system_responses)):
         log10freq = np.log(system_responses[i].rod_freq)/np.log(10)
         log10AR = np.log(system_responses[i].AR)/np.log(10)
         phase = system_responses[i].rod_phase
 
-        ax_AR.errorbar(gvalue(log10freq), gvalue(log10AR), xerr=sdev(log10freq), yerr=sdev(log10AR),
-                       elinewidth=1, capthick=1, capsize=2, markersize=3, marker=marker, color=color)
-        ax_phase.errorbar(gvalue(log10freq), gvalue(phase), xerr=sdev(log10freq), yerr=sdev(phase),
-                          elinewidth=1, capthick=1, capsize=2, markersize=3, marker=marker, color=color)
+        if i == (len(system_responses) - 1) and label is not None:
+            # Normal plotting for all but the last point
+            plot_params["label"] = label
+
+        ax_AR.errorbar(gvalue(log10freq), gvalue(log10AR), xerr=sdev(log10freq), yerr=sdev(log10AR), **plot_params)
+        ax_phase.errorbar(gvalue(log10freq), gvalue(phase), xerr=sdev(log10freq), yerr=sdev(phase), **plot_params)
 
     ax_AR.set_ylabel(r'$\log_{10}(AR)$   (AR [m/A])', fontsize=14)
+    if label is not None:
+        ax_AR.legend()
     ax_AR.grid()
 
     ax_phase.set_xlabel(r'$\log_{10}(\nu)$', fontsize=14)
     ax_phase.set_ylabel(r'$Phase$', fontsize=14)
+    if label is not None:
+        ax_phase.legend()
     ax_phase.grid()
 
     plt.tight_layout()

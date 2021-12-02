@@ -10,10 +10,10 @@ def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
        which represents the solution to the Navier Stokes eq (with BC).
        FDM ... Finite Difference Method
        N x N internal points."""
-    diag_ps = np.ones((N+2)**2) * -2. / (hp*hp)
-    diag_thetas = np.ones((N+2)**2) * -2. / (htheta * htheta)
-    diag_p1 = np.ones((N+2)**2 - 1) / (htheta * htheta)
-    diag_pN = np.ones((N+2)**2 - (N+2)) / (hp * hp)
+    diag_ps = np.ones((N+2)**2, dtype=np.complex128) * -2. / (hp*hp)
+    diag_thetas = np.ones((N+2)**2, dtype=np.complex128) * -2. / (htheta * htheta)
+    diag_p1 = np.ones((N+2)**2 - 1, dtype=np.complex128) / (htheta * htheta)
+    diag_pN = np.ones((N+2)**2 - (N+2), dtype=np.complex128) / (hp * hp)
     M = np.diag(diag_ps) + np.diag(diag_thetas) + np.diag(diag_p1, k=1) + np.diag(diag_p1, k=-1) + np.diag(diag_pN, k=N+2) + np.diag(diag_pN, k=-(N+2))
 
     # Začetni blok identitet za robni pogoj pri i = 0 (p=0)
@@ -79,8 +79,12 @@ def dgdp_at_p_0(g, hp):
 def D_sub(g, omega, eta, hp, htheta, L):
     integral = simpson(-dgdp_at_p_0(g, hp), dx=htheta)
     # Returns separately the (real, imaginary) pair of arrays.
-    return -2*L*omega*eta*np.imag(integral), 2*L*omega*eta*np.real(integral)
+    return np.array([-2*L*omega*eta*np.imag(integral), 2*L*omega*eta*np.real(integral)])
 
 
 def D_surf(g, cplxBo, omega, eta, hp, L):
-    return 2.j*L*omega*eta*cplxBo*(-dgdp_at_p_0(g[:, -1], hp))
+    dgdp_Re, dgdp_Im = np.real(dgdp_at_p_0(g[:, -1], hp)), np.imag(dgdp_at_p_0(g[:, -1], hp))
+    # Returns separately the (real, imaginary) pair of arrays.
+    return np.array([2*L*omega*eta*(cplxBo[0]*dgdp_Im + dgdp_Re*cplxBo[1]),
+                     2*L*omega*eta*(cplxBo[1]*dgdp_Im - cplxBo[0]*dgdp_Re)])
+
