@@ -1,12 +1,12 @@
 import numpy as np
-from scipy.optimize import root
+from scipy.optimize import leastsq
 
 from .freq_and_phase_extract import select_and_analyse
 from .ResultsClass import FinalResults
 from .Rod_TubClass import get_Rod_and_Tub
 from .num_sim_flowfield import D_surf, D_sub, flowfield_FDM
 from gvar import mean as gvalue
-from gvar import gvar
+from gvar import gvar, evalcov
 
 
 def calc_simple_complex_modulus(cal, **kwargs):
@@ -68,7 +68,7 @@ def calc_complex_modulus(cal, **kwargs):
     Bo_excl = []
     omegas_excl = []
     for i, omega in enumerate([2*np.pi*resp.rod_freq for resp in responses]):
-        def min_func(Bo_curr):
+        def min_func(Bo_curr, return_floats=True):
             Re = gvalue(rho * omega * ((rod.d / 2.) ** 2) / eta)
             g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, Bo_curr[0] + 1.j*Bo_curr[1], Re)
 
@@ -83,59 +83,35 @@ def calc_complex_modulus(cal, **kwargs):
             Bo_change_factor = np.array([cplx_Fovz[0]*np.cos(phi) - cplx_Fovz[1]*np.sin(phi),
                                          cplx_Fovz[1]*np.cos(phi) + cplx_Fovz[0]*np.sin(phi)]) * real_factor
 
-            # Dodaj MOŽNO NAPAKO ZNOTRAJ BO CHANGE FACTORJA!!! (PRETVORBA V gvalue() JE NUJNA ZA DELOVANJE,
-            # AMPAK ZA OCENO NAPAKE PA NI VREDU, DODAJ NA KONCU!!
-            return np.square(gvalue(Bo_change_factor) - np.array([1, 0]))
+            if return_floats:
+                return gvalue(Bo_change_factor) - np.array([1, 0])
+            else:
+                return Bo_curr * (Bo_change_factor - np.array([1, 0]))
 
-        # DODAJ ZAUSTAVLJALNI POGOJ DA GLEDA LE NA VELIKOST FUNKCIJE IN NE NA GRADIENT ZA ZAUSTAVLJANJE
-        min_results = root(min_func, np.array([100, 0]), method="lm")
-        # MOGOČE TU ŠE ENKRAT ZAŽENEŠ DA POGRUNTAŠ NAPAKO!? (MOGOČE ZAŽENEŠ ŠE ENKRAT S TEM DA MALO
-        # SPREMENIŠ OBJEKTNO FUNKCIJO, DA TI DAJE V SKALAR, IN POTEM UPORABIŠ VGRAJENO METODO MINIMIZE KI TI
-        # ZA SKALARJE NAJBRŽ VRNE TUDI HESSOVO MATRIKO.
+        best_Bo, best_Bo_unscal_cov, infodict, message, ier = leastsq(min_func, np.array([100, 0]), full_output=True)
+        best_Bo_cov = best_Bo_unscal_cov * np.var(min_func(best_Bo))
 
-        if min_results.success:
+        # Potem pa moramo dodati še kovariančno matriko ki pride iz napake izračuna samega factorja!
+        cov_from_factor_eval = evalcov(min_func(best_Bo, return_floats=False))
+
+        # TODO: FIGURE OUT HOW TO PROPAGATE THE ERROR TROUGH THE PROGRAM WITHOUT MID-PROGRAM DEFINITIONS like
+        # bo.append(gvar(best_Bo, total_Bo_cov)) because ths the prohibits the extraction of correlation to the
+        # primitive inputs!!! (like how does rod length impact the final error, or how much does I_ampl matter???
+        # TODO: FIGURE OUT HOW TO PROPAGATE ERROR !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+        total_Bo_cov = best_Bo_cov + cov_from_factor_eval
+        print(f"cov_from_min:\n{best_Bo_cov}\ncov_from_factor_eval:\n{cov_from_factor_eval}\n")
+
+        if ier in [1, 2, 3, 4]:
             print("Success!")
-            # Dodaj MOŽNO NAPAKO ZNOTRAJ BO CHANGE FACTORJA!!!
-            Bo.append(gvar(min_results.x, np.zeros_like(min_results.x)))
+            Bo.append(gvar(best_Bo, total_Bo_cov))
             omegas.append(omega)
             included.append(responses[i])
         else:
-            print(min_results.message)
-            Bo_excl.append(gvar(min_results.x, np.zeros_like(min_results.x)))
+            print(message)
+            Bo_excl.append(gvar(best_Bo, total_Bo_cov))
             omegas_excl.append(omega)
             excluded.append(responses[i])
-
-        # Bo_curr = np.array([gvar(100, 1), gvar(1, 1)])
-        # for iter_idx in range(max_iter):
-        #     Re = gvalue(rho * omega * ((rod.d / 2.) ** 2) / eta)
-        #     g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, gvalue(Bo_curr[0]) + 1.j*gvalue(Bo_curr[1]), Re)
-        #
-        #     cplx_Fovz = (D_sub(g, omega, eta, hp, htheta, rod.L) +
-        #                  D_surf(g, Bo_curr, omega, eta, hp, rod.L) +
-        #                  cal.k - rod.m*omega*omega)
-        #
-        #     # Calculating Bo change factor
-        #     phi = responses[i].rod_phase
-        #     real_factor = cal.alpha/(responses[i].AR * (np.square(cplx_Fovz[0]*np.cos(phi) - cplx_Fovz[1]*np.sin(phi)) +
-        #                                                 np.square(cplx_Fovz[1]*np.cos(phi) + cplx_Fovz[0]*np.sin(phi))))
-        #     Bo_change_factor = np.array([cplx_Fovz[0]*np.cos(phi) - cplx_Fovz[1]*np.sin(phi),
-        #                                  cplx_Fovz[1]*np.cos(phi) + cplx_Fovz[0]*np.sin(phi)]) * real_factor
-        #     Bo_curr *= Bo_change_factor
-        #     print(np.square(Bo_change_factor[0] - 1) + np.square(Bo_change_factor[1]))
-        #
-        #     if (np.square(Bo_change_factor[0] - 1) + np.square(Bo_change_factor[1])) < np.square(0.05):
-        #         print("Converged!\n")
-        #         Bo.append(Bo_curr)
-        #         omegas.append(omega)
-        #         included.append(responses[i])
-        #         break
-        # # If a break has occured in the for loop, the else will not compute.
-        # # If the loop hasn't converged, then else will execute!
-        # else:
-        #     print("Didn't converge!\n")
-        #     excluded.append(responses[i])
-        #     Bo_excl.append(Bo_curr)
-        #     omegas_excl.append(omega)
 
     Bo = np.array(Bo)
     omegas = np.array(omegas)
