@@ -198,7 +198,9 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     if rod_led_phase_correct:
         result_dict["rod_phase"] += np.pi
 
-    return SingleResult(result_dict, measrmnt, exceptable_phase_insanity)
+    mean_rod_position = np.sum(measrmnt.positions)/len(measrmnt.positions)
+
+    return SingleResult(result_dict, measrmnt, exceptable_phase_insanity, mean_rod_position)
 
 
 def select_and_analyse(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[], complex_drift=True, plot_sys_resp=False,

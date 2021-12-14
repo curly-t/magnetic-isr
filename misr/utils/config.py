@@ -82,6 +82,9 @@ def setup():
     water_filepath = path_join(info_dir, "water_info.dat")
     print("WATER_FILE='{0}'".format(water_filepath), file=conf_file)
 
+    hw_config = path_join(info_dir, "hw_config")
+    print("HW_CONFIG='{0}'".format(hw_config), file=conf_file)
+
     conf_file.close()
 
     ans = ""
@@ -108,6 +111,7 @@ def get_config():
     info_dir = re.search("INFO_DIR='.*'", conf_file_contents)[0][10:-1]
     cal_dir = re.search("CAL_DIR='.*'", conf_file_contents)[0][9:-1]
     water_info = re.search("WATER_FILE='.*'", conf_file_contents)[0][12:-1]
+    hw_config = re.search("HW_CONFIG='.*'", conf_file_contents)[0][11:-1]
 
-    return {"meas": meas_dir, "info": info_dir, "cal": cal_dir, "water": water_info}
+    return {"meas": meas_dir, "info": info_dir, "cal": cal_dir, "water": water_info, "hw": hw_config}
 
