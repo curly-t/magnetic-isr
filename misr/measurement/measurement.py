@@ -29,7 +29,7 @@ def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.0
 def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5,
         max_measurement_time=420, num_periods=15, pixel_safety_margin=100, dynamic_amplitude=True):
 
-    hw_conf = get_hw_config
+    hw_conf = get_hw_config()
 
     time_len = time_run(freqs, pre_tracking_wait, max_measurement_time, num_periods)
     print(f"The run will take no less than {round(time_len / 60)} minutes.")
