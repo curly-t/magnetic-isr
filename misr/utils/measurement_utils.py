@@ -8,6 +8,19 @@ from functools import cache
 
 @cache
 def get_hw_config():
+    """
+    Fetch the hardware configuration of the measurement setup like: internet serial port name, logfile name,
+    serial baudrate, server port, server address, max current for continuouse operation and image width.
+
+    Results are returned in a dictionary with keys:
+        - serial_port       Designates the serial port for communication with the coil current control
+        - logfilename       Full name of the log file.
+        - bd                Serial baudrate
+        - x_pixels          Full image width (maximum allowed rod oscillation amplitude
+        - server_port       The server port for communication with camera software
+        - server_address    The server address for camera communications
+        - max_current       Maximum allowed constant current trough coils, in amperes.
+    """
     hw_config_filepath = get_config()["hw"]
 
     with open(hw_config_filepath, "r") as hw_config_file:
@@ -26,13 +39,16 @@ def get_hw_config():
 
 
 def setup_serial():
+    """ Open serial port, set up communication, and return the serial.Serial object. Can work as an context manager! """
     hw_config = get_hw_config()
     return serial.Serial(port=hw_config["serial_port"], timeout=1, baudrate=hw_config["bd"])
 
 
 def send_serial_command(s, cmd):
+    """ Sends serial commands to the coil current controller and recieves the response. Logs both.
+    Gets a serial instance s and a command cmd."""
     logfilename = get_hw_config()["logfilename"]
-    with open(logfilename, "w+") as logfile:
+    with open(logfilename, "a") as logfile:
         print(f"{time.strftime('%Y-%m-%d %H-%M-%S')} SENDING TO SERIAL: {cmd}", file=logfile)
         s.write(cmd)
         time.sleep(0.1)
@@ -41,6 +57,7 @@ def send_serial_command(s, cmd):
 
 
 def get_calibrated_current_value(channel, currentA):
+    """ Calculates the current (amperes) to setting (arb. num.) conversion for each coil/channel."""
     if channel == 1:
         return 0.5224 * currentA + 0.001412
     elif channel == 2:
@@ -50,18 +67,23 @@ def get_calibrated_current_value(channel, currentA):
 
 
 def cmd_stop(s):
+    """ Send stop command. Gets a serial instance s."""
     send_serial_command(s, b'STOP\r\n')
 
 
 def cmd_start(s):
+    """ Send start command. Gets a serial instance s"""
     send_serial_command(s, b'START\r\n')
 
 
 def cmd_set_frequency(s, frequency):
+    """ Send frequency change command. Gets a serial instance s and the frequency."""
     send_serial_command(s, b'FREQ=%.3f\r\n' % frequency)
 
 
 def cmd_set_current(s, offsetA, amplitudeA):
+    """ Set current on both coils. Gets a serial instance s and offset and amplitude currents.
+    All current values are passed in amperes."""
     check_current(amplitudeA, offsetA)
 
     maxCurrent = offsetA + amplitudeA
@@ -79,6 +101,8 @@ def cmd_set_current(s, offsetA, amplitudeA):
 
 
 def cmd_set_current_on_coil(s, channel, offsetA, amplitudeA):
+    """ Set current on each coil separately. Gets a serial instance s, offset and amplitude currents and the channel id.
+    All current values are passed in amperes. Channel id is either 1 or 2.""""
     check_current(amplitudeA, offsetA)
 
     maxCurrent = offsetA + amplitudeA
@@ -98,11 +122,16 @@ def cmd_set_current_on_coil(s, channel, offsetA, amplitudeA):
 
 
 def cmd_set_led_current(s, offsetA, amplitudeA):
+    """ Send led offset and amplitude settings. Gets serial instantce s and offset and amplitude currents.
+    All currents passes in amperes."""
     send_serial_command(s, b'OFFLED=%.3f\r\n' % offsetA)
     send_serial_command(s, b'AMPLED=%.3f\r\n' % amplitudeA)
 
 
 def send_to_server(message):
+    """ Sends a message trough TCP/IP socket to the software controlling the camera. Logs the message sent and
+    any response recieved back. Server address, port and log filename are gotten from the hardware config file.
+    """
     # Create a TCP/IP socket
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
@@ -110,7 +139,7 @@ def send_to_server(message):
     hw_conf = get_hw_config()
     server_address = (hw_conf["server_address"], hw_conf["server_port"])
 
-    with open(hw_conf["logfilename"], "w") as logfile:
+    with open(hw_conf["logfilename"], "a") as logfile:
         try:
             # Connect to server
             sock.connect(server_address)
@@ -133,10 +162,12 @@ def send_to_server(message):
 
 
 def set_framerate(framerate):
+    """ Set framerate of the camera. """
     send_to_server('SET_FRAMERATE %.3f' % framerate)
 
 
 def enable_led(led_offset=0.09, led_ampl=0.0):
+    """ Enables the LED with specified offsets and amplitudes."""
     with setup_serial() as s:
         time.sleep(0.1)
         cmd_set_led_current(s, led_offset, led_ampl)
@@ -146,6 +177,7 @@ def enable_led(led_offset=0.09, led_ampl=0.0):
 
 
 def disable_all():
+    """ Disable all outputs! """
     with setup_serial() as s:
         time.sleep(0.1)
         cmd_set_led_current(s, 0., 0.)
@@ -153,12 +185,14 @@ def disable_all():
 
 
 def disable_all_coils():
+    """ Disable all coils! """
     with setup_serial() as s:
         time.sleep(0.1)
         cmd_stop(s)
 
 
 def make_measurement_run_folder():
+    """ Creates a measurement run folder, based on current date, and a subfolder based on the specified name. """
     dt = datetime.now()
     measurement_folder = get_config()["meas"]
     date_folder_path = path.join(measurement_folder, dt.strftime('%m-%d-%Y'))
@@ -181,19 +215,34 @@ def make_measurement_run_folder():
 
 
 def check_current(ampl, offs):
+    """ Checks the validity of proposed current updates. If a discrepancy is discovered,
+    a user intervention in form of a warning and a question to continue is raised. """
     max_curr = get_hw_config()["max_current"]
     if (ampl + offs > max_curr) or (offs - ampl < 0.0):
         ask_do_you_want_to_continue(f"Some method wants to set the max current to {ampl + offs} but maximum allowed is {max_curr}!")
 
 
-def check_freqs(freqs, max_time, min_cycles, min_datapoints_per_cycle, max_framerate):
+def check_freqs(freqs, max_time, min_num_periods, min_datapoints_per_period, max_framerate):
+    """ Checks for 2 things:
+            - Maximum measurement time allows for measurement of at least a minimum number of periods for each frequency.
+            - Maximum framerate allows for measurement of at least a minimum number of data points per period.
+        If discrepancy is discovered, a user intervention in form of a warning and a question to continue is raised.
+
+        Attributes:
+            - freqs                         Measurement frequencies
+            - max_time                      Maximum measurement time for each frequency
+            - min_num_periods               The minimum number of
+            - min_datapoints_per_period     The minimum number of data points to be gathered per period for each freq.
+            - max_framerate                 The maximum framerate.
+
+    """
     any_warnings = False
     for freq in freqs:
-        if max_time * freq > min_cycles:
-            warn(f"For frequency {freq} there will be only {max_time * freq} cycles instead of {min_cycles}!")
+        if max_time * freq > min_num_periods:
+            warn(f"For frequency {freq} there will be only {max_time * freq} cycles instead of {min_num_periods}!")
             any_warnings = True
-        if min_datapoints_per_cycle * freq > max_framerate:
-            warn(f"For frequency {freq} there will be only {max_framerate} of datapoints per cycle instead of {min_datapoints_per_cycle * freq}!")
+        if min_datapoints_per_period * freq > max_framerate:
+            warn(f"For frequency {freq} there will be only {max_framerate} of datapoints per cycle instead of {min_datapoints_per_period * freq}!")
             any_warnings = True
 
     if any_warnings:
@@ -201,6 +250,7 @@ def check_freqs(freqs, max_time, min_cycles, min_datapoints_per_cycle, max_frame
 
 
 def ask_do_you_want_to_continue(warning=None):
+    """ Raises a warning with a user defines message, and asks for user intervention to continue. """
     if warning is not None:
         warn(warning)
     ans = str(input("Do you want to continue? [y/N]"))
