@@ -32,7 +32,7 @@ def setup_serial():
 
 def send_serial_command(s, cmd):
     logfilename = get_hw_config()["logfilename"]
-    with open(logfilename, "r") as logfile:
+    with open(logfilename, "w") as logfile:
         print(f"SENDING TO SERIAL: {cmd}", file=logfile)
         s.write(cmd)
         time.sleep(0.1)
@@ -106,7 +106,7 @@ def send_to_server(message):
     hw_conf = get_hw_config()
     server_address = (hw_conf["server_address"], hw_conf["server_port"])
 
-    with open(hw_conf["logfilename"], "r") as logfile:
+    with open(hw_conf["logfilename"], "w") as logfile:
         try:
             # Connect to server
             sock.connect(server_address)
@@ -126,6 +126,10 @@ def send_to_server(message):
     # Close the socket - WHY WAS IT COMMENTED OUT? MAYBE THIS CAN CAUSE PROBLEMS - I WILL TRY WITH IT ENABLED AND SEE
     # PAZI !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     sock.close()
+
+
+def set_framerate(framerate):
+    send_to_server('SET_FRAMERATE %.3f' % framerate)
 
 
 def enable_led(led_offset=0.09, led_ampl=0.0):

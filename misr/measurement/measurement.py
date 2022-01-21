@@ -3,7 +3,7 @@ from os import path
 from gvar import mean as gvalue
 
 from ..utils.measurement_utils import cmd_set_led_current, cmd_set_current, cmd_set_frequency, cmd_start,\
-    send_to_server, setup_serial, make_measurement_run_folder, check_current, check_frequency, get_hw_config
+    send_to_server, setup_serial, make_measurement_run_folder, check_current, check_frequency, get_hw_config, set_framerate
 from ..analysis.import_trackdata import import_filepaths
 from ..analysis.freq_and_phase_extract import freq_phase_ampl
 
@@ -27,9 +27,11 @@ def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.0
 
 
 def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5,
-        max_measurement_time=420, num_periods=15, pixel_safety_margin=100, dynamic_amplitude=True):
+        max_measurement_time=420, num_periods=15, pixel_safety_margin=100, dynamic_amplitude=True,
+        datapoints_per_cycle=20, dynamic_framerate=True):
 
     hw_conf = get_hw_config()
+    max_framerate = float(input("Please input the maximum framerate: "))
 
     time_len = time_run(freqs, pre_tracking_wait, max_measurement_time, num_periods)
     print(f"The run will take no less than {round(time_len / 60)} minutes.")
@@ -52,6 +54,8 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
 
             print("Current on!\nFrequency %.3f" % freq)
             cmd_set_frequency(s, freq)
+            if dynamic_framerate:
+                set_framerate(min(datapoints_per_cycle * freq, max_framerate))
             cmd_start(s)
 
             time.sleep(pre_tracking_wait)
@@ -76,6 +80,8 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
         print("Constant current!")
         cmd_set_current(s, offset, 0.00)
         cmd_set_frequency(s, 0.01)
+        if dynamic_framerate:
+            set_framerate(max_framerate)
         cmd_start(s)
 
 
