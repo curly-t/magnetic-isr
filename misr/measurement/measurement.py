@@ -2,8 +2,9 @@ import time
 from os import path
 from gvar import mean as gvalue
 
-from ..utils.measurement_utils import cmd_set_led_current, cmd_set_current, cmd_set_frequency, cmd_start,\
-    send_to_server, setup_serial, make_measurement_run_folder, check_current, check_frequency, get_hw_config, set_framerate
+from ..utils.measurement_utils import cmd_set_led_current, cmd_set_current, cmd_set_frequency,\
+    cmd_start, send_to_server, setup_serial, make_measurement_run_folder, check_current,\
+    check_freqs, get_hw_config, set_framerate, ask_do_you_want_to_continue
 from ..analysis.import_trackdata import import_filepaths
 from ..analysis.freq_and_phase_extract import freq_phase_ampl
 
@@ -27,17 +28,17 @@ def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.0
 
 
 def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5,
-        max_measurement_time=420, num_periods=15, pixel_safety_margin=100, dynamic_amplitude=True,
+        max_measurement_time=420, num_periods=15, min_cycles=4, pixel_safety_margin=100, dynamic_amplitude=True,
         datapoints_per_cycle=20, dynamic_framerate=True):
 
     hw_conf = get_hw_config()
     max_framerate = float(input("Please input the maximum framerate: "))
 
+    check_freqs(freqs, max_measurement_time, min_cycles, datapoints_per_cycle, max_framerate)
+
     time_len = time_run(freqs, pre_tracking_wait, max_measurement_time, num_periods)
     print(f"The run will take no less than {round(time_len / 60)} minutes.")
-    ans = str(input("Do you want to continue? [Y/n]"))
-    if ans != "Y":
-        exit()
+    ask_do_you_want_to_continue()
 
     full_folder_path = make_measurement_run_folder()
 
@@ -49,9 +50,6 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
         cmd_set_current(s, offset, ampl)
 
         for freq in freqs:
-            check_current(ampl, offset)
-            check_frequency(freq, max_measurement_time)
-
             print("Current on!\nFrequency %.3f" % freq)
             cmd_set_frequency(s, freq)
             if dynamic_framerate:

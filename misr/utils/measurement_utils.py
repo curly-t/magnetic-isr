@@ -32,12 +32,12 @@ def setup_serial():
 
 def send_serial_command(s, cmd):
     logfilename = get_hw_config()["logfilename"]
-    with open(logfilename, "w") as logfile:
-        print(f"SENDING TO SERIAL: {cmd}", file=logfile)
+    with open(logfilename, "w+") as logfile:
+        print(f"{time.strftime('%Y-%m-%d %H-%M-%S')} SENDING TO SERIAL: {cmd}", file=logfile)
         s.write(cmd)
         time.sleep(0.1)
         line = s.readline()
-        print(f"READING FROM SERIAL: {line}", file=logfile)
+        print(f"{time.strftime('%Y-%m-%d %H-%M-%S')} READING FROM SERIAL: {line}", file=logfile)
 
 
 def get_calibrated_current_value(channel, currentA):
@@ -62,6 +62,8 @@ def cmd_set_frequency(s, frequency):
 
 
 def cmd_set_current(s, offsetA, amplitudeA):
+    check_current(amplitudeA, offsetA)
+
     maxCurrent = offsetA + amplitudeA
     minCurrent = max(offsetA - amplitudeA, 0)
 
@@ -77,6 +79,8 @@ def cmd_set_current(s, offsetA, amplitudeA):
 
 
 def cmd_set_current_on_coil(s, channel, offsetA, amplitudeA):
+    check_current(amplitudeA, offsetA)
+
     maxCurrent = offsetA + amplitudeA
     minCurrent = max(offsetA - amplitudeA, 0)
 
@@ -112,12 +116,12 @@ def send_to_server(message):
             sock.connect(server_address)
 
             # Send data
-            print(f"SENDING TO SERVER: {message}", file=logfile)
+            print(f"{time.strftime('%Y-%m-%d %H-%M-%S')} SENDING TO SERVER: {message}", file=logfile)
             sock.send(message.encode())
 
             # Look for the response
             data = sock.recv(1024)
-            print(f"RECEIVED FROM SERVER {data}", file=logfile)
+            print(f"{time.strftime('%Y-%m-%d %H-%M-%S')} RECEIVED FROM SERVER {data}", file=logfile)
 
         except Exception as e:
             print(f"Exception {e.__class__} OCCURED!", file=logfile)
@@ -178,9 +182,28 @@ def make_measurement_run_folder():
 
 def check_current(ampl, offs):
     max_curr = get_hw_config()["max_current"]
-    assert (ampl + offs) <= max_curr
-    assert (ampl - offs) > 0.
+    if (ampl + offs > max_curr) or (offs - ampl < 0.0):
+        ask_do_you_want_to_continue(f"Some method wants to set the max current to {ampl + offs} but maximum allowed is {max_curr}!")
 
 
-def check_frequency(freq, max_time):
-    assert (max_time * freq) > 4
+def check_freqs(freqs, max_time, min_cycles, min_datapoints_per_cycle, max_framerate):
+    any_warnings = False
+    for freq in freqs:
+        if max_time * freq > min_cycles:
+            warn(f"For frequency {freq} there will be only {max_time * freq} cycles instead of {min_cycles}!")
+            any_warnings = True
+        if min_datapoints_per_cycle * freq > max_framerate:
+            warn(f"For frequency {freq} there will be only {max_framerate} of datapoints per cycle instead of {min_datapoints_per_cycle * freq}!")
+            any_warnings = True
+
+    if any_warnings:
+        ask_do_you_want_to_continue()
+
+
+def ask_do_you_want_to_continue(warning=None):
+    if warning is not None:
+        warn(warning)
+    ans = str(input("Do you want to continue? [y/N]"))
+    if ans.upper() == "N":
+        disable_all_coils()
+        exit()
