@@ -13,3 +13,18 @@ If you want to get the latest version of the master branch you just run the comm
 
 pip install -e git+https://github.com/curly-t/magnetic-isr.git@master#egg=misr
 
+Minimum python version is 3.9
+
+Installed python modules:
+- pyserial
+- tkfilebrowser
+- gvar
+- numpy
+- matplotlib
+- scipy
+
+For windows you also need:
+- pywin32
+
+WINDOWS ONLY: After install of pywin32, you need to run /path/to/conda/environment/Scripts/pywin32_postinstall.py 
+

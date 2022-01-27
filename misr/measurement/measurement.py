@@ -6,7 +6,7 @@ from gvar import mean as gvalue
 from ..utils.measurement_utils import cmd_set_led_current, cmd_set_current, cmd_set_frequency,\
     cmd_start, send_to_server, setup_serial, make_measurement_run_folder,\
     check_freqs, get_hw_config, set_framerate, ask_do_you_want_to_continue,\
-    calc_new_dynamic_ampl, print_prerun_checklist
+    calc_new_dynamic_ampl, print_prerun_checklist, sleep_and_record_comments
 
 
 def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.03, wait_periods=4):
@@ -106,8 +106,8 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
         cmd_set_led_current(s, led_offset, led_ampl)
         cmd_set_current(s, offset, ampl)
 
-        for freq in freqs:
-            with open(path.join(full_folder_path, "comments.txt"), "a") as comments_file:
+        with open(path.join(full_folder_path, "comments.txt"), "w") as comments_file:
+            for freq in freqs:
                 filename = f"offs{int(round(1000*offset))}_ampl{int(round(1000*ampl))}_freq{int(round(1000*freq))}.dat"
                 full_filepath = path.join(full_folder_path, filename)
 
@@ -120,14 +120,14 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
                 time.sleep(pre_tracking_wait)
                 send_to_server("start_tracking")
 
-                time.sleep(min(max_measurement_time, num_periods / freq))
-                # start_time = time.perf_counter()
-                # while time.perf_counter() - start_time < min(max_measurement_time, num_periods / freq):
-                #     line = sys.stdin
-                #     if line:
-                #         print(line, file=comments_file)
+                sleep_time = min(max_measurement_time, num_periods / freq)
+                user_exit = sleep_and_record_comments(sleep_time, comments_file, filename, cuttoff_time=0.01)
 
                 send_to_server(f"stop_and_save_tracking {full_filepath}")
+
+                if user_exit:
+                    time.sleep(1.)
+                    ask_do_you_want_to_continue("User typed exit() or quit() mid-run!", s=s)
 
                 if not dynamic_amplitude:
                     time.sleep(post_tracking_wait)

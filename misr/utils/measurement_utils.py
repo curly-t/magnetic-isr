@@ -1,4 +1,5 @@
-import time, socket, serial, re
+import time, socket, serial, re, sys
+from select import select
 from warnings import warn
 from datetime import datetime
 from os import path, mkdir
@@ -89,7 +90,7 @@ def cmd_set_frequency(s, frequency):
 def cmd_set_current(s, offsetA, amplitudeA):
     """ Set current on both coils. Gets a serial instance s and offset and amplitude currents.
     All current values are passed in amperes."""
-    check_current(amplitudeA, offsetA)
+    check_current(amplitudeA, offsetA, s=s)
 
     maxCurrent = offsetA + amplitudeA
     minCurrent = max(offsetA - amplitudeA, 0)
@@ -108,7 +109,7 @@ def cmd_set_current(s, offsetA, amplitudeA):
 def cmd_set_current_on_coil(s, channel, offsetA, amplitudeA):
     """ Set current on each coil separately. Gets a serial instance s, offset and amplitude currents and the channel id.
     All current values are passed in amperes. Channel id is either 1 or 2."""
-    check_current(amplitudeA, offsetA)
+    check_current(amplitudeA, offsetA, s=s)
 
     maxCurrent = offsetA + amplitudeA
     minCurrent = max(offsetA - amplitudeA, 0)
@@ -181,31 +182,47 @@ def enable_led(led_offset=0.09, led_ampl=0.0):
         cmd_start(s)
 
 
-def disable_all():
-    """ Disable all outputs! """
-    with setup_serial() as s:
+def disable_all(s=None):
+    """ Disable all outputs!
+    If serial.Serial object is present in s, then the method will use the allready set up instance provided! """
+    if isinstance(s, serial.Serial):
         time.sleep(0.1)
         cmd_set_led_current(s, 0., 0.)
         cmd_stop(s)
+    else:
+        with setup_serial() as s:
+            time.sleep(0.1)
+            cmd_set_led_current(s, 0., 0.)
+            cmd_stop(s)
 
 
-def disable_all_coils():
-    """ Disable all coils! """
-    with setup_serial() as s:
+def disable_all_coils(s=None):
+    """ Disable all coils!
+    If serial.Serial object is present in s, then the method will use the allready set up instance provided! """
+    if isinstance(s, serial.Serial):
         time.sleep(0.1)
         cmd_stop(s)
+    else:
+        with setup_serial() as s:
+            time.sleep(0.1)
+            cmd_stop(s)
 
 
 def make_measurement_run_folder():
-    """ Creates a measurement run folder, based on current date, and a subfolder based on the specified name. """
+    """ Creates a measurement run folder, based on current date, and a subfolder based on the specified name.
+    Also adds the measurement configuration file to the folder, so the measurement class knows to find it. """
     dt = datetime.now()
     measurement_folder = get_config()["meas"]
-    date_folder_path = path.join(measurement_folder, dt.strftime('%m-%d-%Y'))
+    date_folder_path = path.join(measurement_folder, dt.strftime('%Y-%m-%d'))
 
     if not path.isdir(date_folder_path):
         mkdir(date_folder_path)
 
-    print("You are starting a new run! How would you like to name the folder?")
+    print("You are starting a new run!")
+    rod_id = int(input("Please input the rod id: "))
+    tub_id = int(input("Please input the tub id: "))
+
+    print("How would you like to name the folder?")
     while True:
         folder_name = str(input())
 
@@ -216,15 +233,24 @@ def make_measurement_run_folder():
     full_folder_path = path.join(date_folder_path, folder_name)
     mkdir(full_folder_path)
 
+    # Add measurement config file
+    with open(path.join(full_folder_path, ".meas_config"), "w") as meas_conf_file:
+        print(f"X_PIXEL_COUNT='{get_hw_config()['x_pixels']}'", file=meas_conf_file)
+        print(f"PIXEL_SIZE='{get_hw_config()['pixel_size']:.10f}'", file=meas_conf_file)
+        print(f"ROD_ID='{rod_id}'", file=meas_conf_file)
+        print(f"TUB_ID='{tub_id}'", file=meas_conf_file)
+
     return full_folder_path
 
 
-def check_current(ampl, offs):
+def check_current(ampl, offs, s=None):
     """ Checks the validity of proposed current updates. If a discrepancy is discovered,
-    a user intervention in form of a warning and a question to continue is raised. """
+    a user intervention in form of a warning and a question to continue is raised.
+    If the funciton is called during a run sestion, one MUST provide serial.Serial instance in use,
+    as the attribute s. """
     max_curr = get_hw_config()["max_current"]
     if (ampl + offs > max_curr) or (offs - ampl < 0.0):
-        ask_do_you_want_to_continue(f"Some method wants to set the max current to {ampl + offs} but maximum allowed is {max_curr}!")
+        ask_do_you_want_to_continue(f"Some method wants to set the max current to {ampl + offs} but maximum allowed is {max_curr}!", s=s)
 
 
 def check_freqs(freqs, max_time, min_num_periods, min_datapoints_per_period, max_framerate):
@@ -254,13 +280,15 @@ def check_freqs(freqs, max_time, min_num_periods, min_datapoints_per_period, max
         ask_do_you_want_to_continue()
 
 
-def ask_do_you_want_to_continue(warning=None):
-    """ Raises a warning with a user defines message, and asks for user intervention to continue. """
+def ask_do_you_want_to_continue(warning=None, s=None):
+    """ Raises a warning with a user defines message, and asks for user intervention to continue.
+    If the funciton is called during a run sestion, one MUST provide serial.Serial instance in use,
+    as the attribute s. """
     if warning is not None:
         warn(warning)
     ans = str(input("Do you want to continue? [y/N]"))
     if ans.upper() == "N":
-        disable_all_coils()
+        disable_all_coils(s)
         exit()
 
 
@@ -273,13 +301,39 @@ def calc_new_dynamic_ampl(offset, ampl, full_filepath, pixel_safety_margin, hw_c
     return ampl
 
 
+def sleep_and_record_comments(t, file_object, recording_name, cuttoff_time=0.01):
+    """ Sleeps for t seconds, but records comments in the file represented by the file handler.
+        If the user writes "quit()" or "exit()", the function imidiately returns 1, otherwise it returns 0."""
+    # MAYBE ADD A SWITHC - if on windows just regular sleep, if on linux - comment recorder!
+    start = time.perf_counter()
+    print("Tracking started! Comment in here if needed:")
+    print(f"Comments for {recording_name}:", file=file_object)
+    while (t - (time.perf_counter() - start)) > cuttoff_time:
+        # SELECT MAY BE AN ISSUE FOR WINDOWS!!!
+        i, o, e = select([sys.stdin], [], [], max(cuttoff_time, t - (time.perf_counter() - start)))
+
+        if i:
+            line = sys.stdin.readline().strip()
+            if line.lower() == "exit()" or line.lower() == "quit()":
+                return 1
+            else:
+                print(line, file=file_object)
+
+    print("Tracking period ended!")
+    print("", file=file_object)
+
+    # Just to be shure the program slept just enough! :)
+    time.sleep(max(0.0, (t - (time.perf_counter() - start))))
+    return 0
+
+
 def print_prerun_checklist():
     """ Outputs to stdout a checklist of items that need to be checked pre run."""
     print(f"\n\n{'-'*10} PRE-RUN CHECKLIST {'-'*10}")
     print("\t[1] All auto settings OFF.")
     print("\t[2] Framerate and Gamma settings ON, all else OFF.")
-    print("\t[3] Choose camera mode (0 - 1080x1920 vs. 1 - 600x960). Mode 1 is preffered.")
-    print("\t[4] Check hw_config file if X_PIXEL_COUNT is correctly set.")
+    print("\t[3] Choose camera mode (0 - 1080x1920 vs. 1 - 600x960). Check hw_config file:")
+    print(f"\t[4] Current x_pixel_count is {get_hw_config()['x_pixels']} (from hw_config file).")
     print("\t[5] Center rod.")
     print("\t[6] Set viewing field, recenter rod.")
     print("\t[8] See max fps, min fps, set appropriate (const.) shutter.")

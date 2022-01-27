@@ -161,7 +161,7 @@ def simple_calibration(**kwargs):
     kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
 
-    rod, tub = get_Rod_and_Tub([sr.meas.dirname for sr in system_responses])
+    rod, tub = get_Rod_and_Tub(system_responses)
 
     # Sort system responses by frequency
     system_responses = sorted(system_responses, key=lambda sys_resp: gvalue(sys_resp.rod_freq))
@@ -194,7 +194,7 @@ def FDM_calibration(**kwargs):
     # Sort system responses by frequency
     system_responses = sorted(system_responses, key=lambda sys_resp: gvalue(sys_resp.rod_freq))
 
-    rod, tub = get_Rod_and_Tub([sr.meas.dirname for sr in system_responses])
+    rod, tub = get_Rod_and_Tub(system_responses)
 
     def construct_min_func(N):
         max_p = gvalue(np.log(tub.W/rod.d))
@@ -207,7 +207,9 @@ def FDM_calibration(**kwargs):
         flowfields = np.zeros(shape=(len(omegas), N+2, N+2), dtype=np.complex128)
         for i, omega in enumerate(omegas):
             Re = rho * omega * ((gvalue(rod.d)/2.)**2) / eta    # Zaradi simulacije delamo z float in ne gvar samo tu.
+            # ZDAJ TO NE DELUJE - VRNE SAMO Nans!!!!!!!!!!!!!!
             g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
+            print(g)
             flowfields[i] = g
             # ps, thetas, hp in htheta pa bodo vedno enaki, zato bodo tudi po zadnji iteraciji vredu za uporabo naprej v funkciji
 
@@ -243,6 +245,7 @@ def FDM_calibration(**kwargs):
 
     # USES METHOD "lm"
     best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True)
+    print("\nLEASTSQ!!!\n")
 
     # As described in the scipy.optimize.leastsq docs.
     cov = scaled_cov * np.var(min_func(best_params)) / (len(omegas) - 2)

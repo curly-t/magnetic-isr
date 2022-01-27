@@ -24,6 +24,14 @@ def get_tub_info():
     return np.loadtxt(filepath)
 
 
+def get_rod_info_from_id(rod_id):
+    return np.loadtxt(path_join(get_config()["info"], "rod_{0}".format(rod_id)))
+
+
+def get_tub_info_from_id(tub_id):
+    return np.loadtxt(path_join(get_config()["info"], "tub_{0}".format(tub_id)))
+
+
 def guess_rod_and_tub(dirnames):
     rod_ids = []
     tub_ids = []
@@ -55,12 +63,12 @@ def guess_and_get_rod_and_tub_info(dirnames):
     rod_id, tub_id = guess_rod_and_tub(dirnames)
 
     if rod_id is not None:
-        rod_info = np.loadtxt(path_join(get_config()["info"], "rod_{0}".format(rod_id)))
+        rod_info = get_rod_info_from_id(rod_id)
     else:
         rod_info = get_rod_info()
     
     if tub_id is not None:
-        tub_info = np.loadtxt(path_join(get_config()["info"], "tub_{0}".format(tub_id)))
+        tub_info = get_tub_info_from_id(tub_id)
     else:
         tub_info = get_tub_info()
 
