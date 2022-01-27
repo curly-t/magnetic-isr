@@ -40,11 +40,11 @@ def guess_rod_and_tub(dirnames):
     rod_id = None
     tub_id = None
 
-    if len(rod_ids) == len(dirnames) and all([rod_ids[0] == rod_ids[i] for i in range(len(rod_ids))]):
-        # Vse mape vsebujejo ime z istim rod_id
-        rod_id = rod_ids[0]
+    if len(rod_ids) == len(dirnames) and len(set(rod_ids)) == 1:
+            # Vse mape vsebujejo ime z istim rod_id
+            rod_id = rod_ids[0]
 
-    if len(tub_ids) == len(dirnames) and all([tub_ids[0] == tub_ids[i] for i in range(len(tub_ids))]):
+    if len(tub_ids) == len(dirnames) and len(set(tub_ids)) == 1:
         # Vse mape vsebujejo ime z istim tub_id
         tub_id = tub_ids[0]
 

@@ -4,6 +4,9 @@ from datetime import datetime
 from os import path, mkdir
 from .config import get_config
 from functools import cache
+from ..analysis.freq_and_phase_extract import freq_phase_ampl
+from ..analysis.import_trackdata import import_filepaths
+from gvar import mean as gvalue
 
 
 @cache
@@ -20,6 +23,7 @@ def get_hw_config():
         - server_port       The server port for communication with camera software
         - server_address    The server address for camera communications
         - max_current       Maximum allowed constant current trough coils, in amperes.
+        - pixel_size        Pixel size expressed in m/pix. Is dependant on resolution, and microscope.
     """
     hw_config_filepath = get_config()["hw"]
 
@@ -33,9 +37,10 @@ def get_hw_config():
         server_address = re.search("SERVER_ADDRESS='.*'", file_contents)[0][16:-1]
         max_current = float(re.search("MAX_CURRENT='.*A'", file_contents)[0][13:-2])
         x_pixels = int(re.search("X_PIXEL_COUNT='.*'", file_contents)[0][15:-1])
+        pixel_size = float(re.search("PIXEL_SIZE='.*'", file_contents)[0][12:-1])
 
     return {"serial_port": serial_port, "logfilename": logfilename, "bd": baudrate, "x_pixels": x_pixels,
-            "server_port": server_port, "server_address": server_address, "max_current": max_current}
+            "server_port": server_port, "server_address": server_address, "max_current": max_current, "pixel_size": pixel_size}
 
 
 def setup_serial():
@@ -102,7 +107,7 @@ def cmd_set_current(s, offsetA, amplitudeA):
 
 def cmd_set_current_on_coil(s, channel, offsetA, amplitudeA):
     """ Set current on each coil separately. Gets a serial instance s, offset and amplitude currents and the channel id.
-    All current values are passed in amperes. Channel id is either 1 or 2.""""
+    All current values are passed in amperes. Channel id is either 1 or 2."""
     check_current(amplitudeA, offsetA)
 
     maxCurrent = offsetA + amplitudeA
@@ -238,11 +243,11 @@ def check_freqs(freqs, max_time, min_num_periods, min_datapoints_per_period, max
     """
     any_warnings = False
     for freq in freqs:
-        if max_time * freq > min_num_periods:
-            warn(f"For frequency {freq} there will be only {max_time * freq} cycles instead of {min_num_periods}!")
+        if max_time * freq < min_num_periods:
+            warn(f"For frequency {freq} there will be only {max_time * freq} periods instead of {min_num_periods}!")
             any_warnings = True
-        if min_datapoints_per_period * freq > max_framerate:
-            warn(f"For frequency {freq} there will be only {max_framerate} of datapoints per cycle instead of {min_datapoints_per_period * freq}!")
+        if min_datapoints_per_period > max_framerate / freq:
+            warn(f"For frequency {freq} there will be only {max_framerate / freq} of datapoints per period instead of {min_datapoints_per_period}!")
             any_warnings = True
 
     if any_warnings:
@@ -257,3 +262,25 @@ def ask_do_you_want_to_continue(warning=None):
     if ans.upper() == "N":
         disable_all_coils()
         exit()
+
+
+def calc_new_dynamic_ampl(offset, ampl, full_filepath, pixel_safety_margin, hw_conf):
+    measurement = import_filepaths([full_filepath])[0]
+    res = freq_phase_ampl(measurement)
+    current_factor = (hw_conf["x_pixels"] - pixel_safety_margin - res.rod_mean) / gvalue(res.rod_ampl)
+    ampl = min(hw_conf["max_current"] - offset, ampl * current_factor)
+    print(f"New amplitude {ampl}A.")
+    return ampl
+
+
+def print_prerun_checklist():
+    """ Outputs to stdout a checklist of items that need to be checked pre run."""
+    print(f"\n\n{'-'*10} PRE-RUN CHECKLIST {'-'*10}")
+    print("\t[1] All auto settings OFF.")
+    print("\t[2] Framerate and Gamma settings ON, all else OFF.")
+    print("\t[3] Choose camera mode (0 - 1080x1920 vs. 1 - 600x960). Mode 1 is preffered.")
+    print("\t[4] Check hw_config file if X_PIXEL_COUNT is correctly set.")
+    print("\t[5] Center rod.")
+    print("\t[6] Set viewing field, recenter rod.")
+    print("\t[8] See max fps, min fps, set appropriate (const.) shutter.")
+    print(f"{'-'*17} END {'-'*17}\n\n")

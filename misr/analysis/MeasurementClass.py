@@ -20,11 +20,10 @@ class Measurement:
         # FIND / MEASURE ERROR VALUES!!! IT IS OF EXTREME IMPORTANCE TO THE ERROR ESTIMATION!!!
         # NATAN ANSWER --> cca 0.8mA of error combined!   -- tu dal pol napake Ioffs in pol Iampl
 
-        # Info on the pixel size calibration:
-        # Pixel size determines the size in real life, of one pixel on the screen.
-        # Used for conversion from pixel coordinates to [m]
-        # pixel_size = m/pixel
-        self.pixel_size = 0.00005   # Measured pixel size
+        # NEKAKO NAREDI DA TO DELUJE!!!!!!!!!!!!!!!
+        # hw_config = get_hw_config()
+        # self.pixel_size = hw_config["pixel_size"]   # Measured pixel size
+        self.pixel_size = 0.00000296
 
         # The trackData array is comprised of 4 columns:
         # frameIdx, frameTime, rodEdgePos, brightness

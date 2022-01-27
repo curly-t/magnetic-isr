@@ -20,7 +20,8 @@ def running_average(input_array, averaging_len):
 
 
 def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
-    plot_bright_results=False, complex_drift=True, rod_led_phase_correct=True, exceptable_phase_insanity=0.1*np.pi):
+    plot_bright_results=False, complex_drift=True, rod_led_phase_correct=True, exceptable_phase_insanity=0.1*np.pi,
+    ignore_extreme_rod_positions=True):
     """ This function calculates the frequency of the vibration of the rod, the relative phase between
         the brightness modulation (current) and the response of the rod (position), and the amplitude of the rod response,
         from the results of rod tracking, and brightness logging.
@@ -48,6 +49,8 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
             plot_track_results  --> A boolean value used to determine, weather to plot the results from tracking rod's position
             
             plot_bright_results --> A boolean value used to determine, weather to plot the results from brightnes analisys
+
+            ignore_extreme_rod_positions  --> If set to True, the fitting of position will ignore all 0 rod position values
 
 
         Returns:
@@ -101,20 +104,33 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     # -----------------------------------------------------------------------------------------
 
     # Fitting rod position data ---------------------------------------------------------------
-    min_pos = np.min(measrmnt.positions)
-    max_pos = np.max(measrmnt.positions)
 
-    # TODO: FIX THIS HORRIBLE CODE BLOCK!!!!
+    # GRDI GRDI GRDI GRDI TRY
+    # TODO: --> TOLE MORAŠ LEPŠE ZAPISAT!!!!! -----------------------------------------------------------------
+    try:
+        if ignore_extreme_rod_positions:
+            nonzero_elems = np.flatnonzero(measrmnt.positions)
+            fit_times = gvalue(measrmnt.times)[nonzero_elems]
+            fit_positions = gvalue(measrmnt.positions)[nonzero_elems]
+            fit_sigmas = sdev(measrmnt.positions)[nonzero_elems]
+        else:
+            fit_times = gvalue(measrmnt.times)
+            fit_positions = gvalue(measrmnt.positions)
+            fit_sigmas = sdev(measrmnt.positions)
 
-    low_bound_pos = gvalue([0.5 * (max_pos - min_pos) / 2., measrmnt.Ifreq * 0.8, 0.,
-                            min_pos, -(max_pos - min_pos) / measrmnt.timeLength])
-    high_bound_pos = gvalue([1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, 2*np.pi,
+        min_pos = np.min(fit_positions)
+        max_pos = np.max(fit_positions)
+
+        # TODO: FIX THIS HORRIBLE CODE BLOCK!!!!
+
+        low_bound_pos = gvalue([0.5 * (max_pos - min_pos) / 2., measrmnt.Ifreq * 0.8, 0.,
+                                min_pos, -(max_pos - min_pos) / measrmnt.timeLength])
+        high_bound_pos = gvalue([1.2*(max_pos - min_pos)/2., measrmnt.Ifreq*1.2, 2*np.pi,
                              max_pos, (max_pos - min_pos)/measrmnt.timeLength])
 
-    try:
         # First: fit just for the exact frequency, disregarding phase information
-        pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, gvalue(measrmnt.times), gvalue(measrmnt.positions),
-                                       sigma=sdev(measrmnt.positions), absolute_sigma=True,
+        pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, fit_times, fit_positions,
+                                       sigma=fit_sigmas, absolute_sigma=True,
                                        bounds=(low_bound_pos, high_bound_pos))
 
         pos_coefs = gvar(pos_coefs, pos_cov)
@@ -128,11 +144,13 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
             # print("Drift:", np.std(drift))
 
         # Only permitted to continue if averaging_len is within reason, and the complex drift is sought to be considered
-        if averaging_len_good and complex_drift is True:
-            # Third: Remove drift (from center of data)
+        # TODO: WHEN IGNORE EXTREME POSITIONS is fixed, remove the added pogoj!
+        if averaging_len_good and complex_drift is True and not ignore_extreme_rod_positions:
+            # Calculate drif
             drift_start_offset = averaging_len//2
             drift_stop_offset = -(averaging_len - averaging_len//2) + 1
 
+            # Third: Remove drift (from center of data)
             driftless_pos_data = measrmnt.positions[drift_start_offset:drift_stop_offset] - drift
             driftless_time = measrmnt.times[drift_start_offset:drift_stop_offset]
 
@@ -147,10 +165,26 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
                                      bright_coefs[2] + exceptable_phase_insanity,
                                      max_pos, (max_pos - min_pos)/measrmnt.timeLength])
 
+            # TODO: INCORPORATE CONVOLUTING over FITTING of "intact" parts of trajectories
+            # # Possibly ignore extreme rod positions   
+            # if ignore_extreme_rod_positions:
+            #     nonzero_elems = np.flatnonzero(measrmnt.positions[drift_start_offset:drift_stop_offset]),
+            #     fit_times = gvalue(measrmnt.times)[nonzero_elems]
+            #     fit_positions = gvalue(measrmnt.positions)[nonzero_elems]
+            #     fit_sigmas = sdev(measrmnt.positions)[nonzero_elems]
+            # else:
+            #     fit_times = gvalue(measrmnt.times)
+            #     fit_positions = gvalue(measrmnt.positions)
+            #     fit_sigmas = sdev(measrmnt.positions)
+            # THE INCORPORATE THIS INTO THE FITTING PROCEDURE!!!
+            # pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, fit_times, fit_positions,
+            #                             sigma=fit_sigmas, absolute_sigma=True,
+            #                             bounds=(low_bound_pos, high_bound_pos))
+
             # Finally: Refit the sinusoid to the driftless_data
             pos_coefs, pos_cov = curve_fit(sinusoid_w_drift, gvalue(driftless_time), gvalue(driftless_pos_data),
-                                           sigma=sdev(driftless_pos_data), absolute_sigma=True,
-                                           bounds=(low_bound_pos, high_bound_pos))
+                                        sigma=sdev(driftless_pos_data), absolute_sigma=True,
+                                        bounds=(low_bound_pos, high_bound_pos))
 
             pos_coefs = gvar(pos_coefs, pos_cov)
 

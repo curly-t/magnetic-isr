@@ -1,12 +1,12 @@
 import time
 from os import path
+import sys
 from gvar import mean as gvalue
 
 from ..utils.measurement_utils import cmd_set_led_current, cmd_set_current, cmd_set_frequency,\
     cmd_start, send_to_server, setup_serial, make_measurement_run_folder,\
-    check_freqs, get_hw_config, set_framerate, ask_do_you_want_to_continue
-from ..analysis.import_trackdata import import_filepaths
-from ..analysis.freq_and_phase_extract import freq_phase_ampl
+    check_freqs, get_hw_config, set_framerate, ask_do_you_want_to_continue,\
+    calc_new_dynamic_ampl, print_prerun_checklist
 
 
 def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.03, wait_periods=4):
@@ -41,7 +41,7 @@ def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.0
 
 def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5, post_tracking_wait=2,
         max_measurement_time=420, num_periods=15, min_num_periods=4, pixel_safety_margin=100, dynamic_amplitude=True,
-        datapoints_per_period=20, dynamic_framerate=True):
+        datapoints_per_period=20, dynamic_framerate=True, min_framerate=6):
 
     """ Runs the measurement run for all requested frequencies, at starting amplitude and offset settings.
         The measurement run consists of:
@@ -85,16 +85,18 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
                                         sampling framerate.
             - dynamic_framerate         This option allows for change of framerate for each frequency, so as to satisfy
                                         the request for a specific number of data points per period of oscillation.
+                                        FOR THIS TO WORK, the framerate must be set to "On" in the camera settings.
+            - min_framerate             Minimum framerate of the recording. If the framerate is to low the shutter speed
+                                        rises and as a result the video becomes washed out.
     """
+
+    print_prerun_checklist()
 
     hw_conf = get_hw_config()
     max_framerate = float(input("Please input the maximum framerate: "))
 
     check_freqs(freqs, max_measurement_time, min_num_periods, datapoints_per_period, max_framerate)
-
-    time_len = time_run(freqs, pre_tracking_wait, max_measurement_time, num_periods)
-    print(f"The run will take no less than {round(time_len / 60)} minutes.")
-    ask_do_you_want_to_continue()
+    time_run(freqs, pre_tracking_wait, post_tracking_wait, max_measurement_time, num_periods)
 
     full_folder_path = make_measurement_run_folder()
 
@@ -105,30 +107,37 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
         cmd_set_current(s, offset, ampl)
 
         for freq in freqs:
-            print("Current on!\nFrequency %.3f" % freq)
-            cmd_set_frequency(s, freq)
-            if dynamic_framerate:
-                set_framerate(min(datapoints_per_period * freq, max_framerate))
-            cmd_start(s)
+            with open(path.join(full_folder_path, "comments.txt"), "a") as comments_file:
+                filename = f"offs{int(round(1000*offset))}_ampl{int(round(1000*ampl))}_freq{int(round(1000*freq))}.dat"
+                full_filepath = path.join(full_folder_path, filename)
 
-            time.sleep(pre_tracking_wait)
-            send_to_server("start_tracking")
-            time.sleep(min(max_measurement_time, num_periods / freq))
+                print("Current on!\nFrequency %.3f" % freq)
+                cmd_set_frequency(s, freq)
+                if dynamic_framerate:
+                    set_framerate(max(min_framerate, min(datapoints_per_period * freq, max_framerate)))
+                cmd_start(s)
 
-            filename = f"offs{int(round(1000*offset))}_ampl{int(round(1000*ampl))}_freq{int(round(1000*freq))}.dat"
-            full_filepath = path.join(full_folder_path, filename)
-            send_to_server(f"stop_and_save_tracking {full_filepath}")
+                time.sleep(pre_tracking_wait)
+                send_to_server("start_tracking")
 
-            if not dynamic_amplitude:
-                time.sleep(post_tracking_wait)
-            else:
-                start_time = time.perf_counter()
-                measurement = import_filepaths([full_filepath])[0]
-                res = freq_phase_ampl(measurement)
-                current_factor = (hw_conf["x_pixels"] - pixel_safety_margin - res.rod_mean) / gvalue(res.rod_ampl)
-                ampl = min(hw_conf["max_current"] - offset, ampl * current_factor)
-                stop_time = time.perf_counter()
-                time.sleep(max(0.01, post_tracking_wait - (stop_time - start_time)))
+                time.sleep(min(max_measurement_time, num_periods / freq))
+                # start_time = time.perf_counter()
+                # while time.perf_counter() - start_time < min(max_measurement_time, num_periods / freq):
+                #     line = sys.stdin
+                #     if line:
+                #         print(line, file=comments_file)
+
+                send_to_server(f"stop_and_save_tracking {full_filepath}")
+
+                if not dynamic_amplitude:
+                    time.sleep(post_tracking_wait)
+                else:
+                    start_time = time.perf_counter()
+                    time.sleep(post_tracking_wait / 2.0)
+                    ampl = calc_new_dynamic_ampl(offset, ampl, full_filepath, pixel_safety_margin, hw_conf)
+                    cmd_set_current(s, offset, ampl)
+                    stop_time = time.perf_counter()
+                    time.sleep(max(0.01, post_tracking_wait - (stop_time - start_time)))
 
         print("Constant current!")
         cmd_set_current(s, offset, 0.00)
@@ -158,5 +167,5 @@ def time_run(freqs, pre_tracking_wait, post_tracking_wait, max_measurement_time,
         timer += min(max_measurement_time, num_periods / freq)
         timer += post_tracking_wait
 
-    return timer
-
+    print(f"The run will take no less than {round(timer / 60)} minutes.")
+    ask_do_you_want_to_continue()
