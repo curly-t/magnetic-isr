@@ -1,7 +1,8 @@
+import matplotlib.pyplot as plt
 import numpy as np
-from scipy.sparse import csr_matrix
-from scipy.sparse.linalg import spsolve
+from scipy.linalg import solve as splsolve
 from scipy.integrate import simpson
+
 
 def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
     """Constructs the N x N matrix M* for solving the problem:
@@ -10,7 +11,7 @@ def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
        which represents the solution to the Navier Stokes eq (with BC).
        FDM ... Finite Difference Method
        N x N internal points."""
-    diag_ps = np.ones((N+2)**2, dtype=np.complex128) * -2. / (hp*hp)
+    diag_ps = np.ones((N+2)**2, dtype=np.complex128) * -2. / (hp * hp)
     diag_thetas = np.ones((N+2)**2, dtype=np.complex128) * -2. / (htheta * htheta)
     diag_p1 = np.ones((N+2)**2 - 1, dtype=np.complex128) / (htheta * htheta)
     diag_pN = np.ones((N+2)**2 - (N+2), dtype=np.complex128) / (hp * hp)
@@ -50,9 +51,8 @@ def construct_FDM_system(N, ps, hp, htheta, Re, Bo):
     # vektor za določanje RP
     c = np.zeros((N+2)**2)
     c[:N+2] = 1.0
-    
-    # Mogoče deluje pravilno? Nevem čist točno?
-    return csr_matrix(M - B), c
+
+    return M - B, c
 
 
 def flowfield_FDM(N, max_p, Bo, Re):
@@ -69,7 +69,17 @@ def flowfield_FDM(N, max_p, Bo, Re):
 
     M, c = construct_FDM_system(N, ps, hp, htheta, Re, Bo)
 
-    return np.reshape(spsolve(M, c), (N+2, N+2)), ps, thetas, hp, htheta
+    # >>> scipy.sparse.linalg.solve FAILS!!!
+    # When searching for an answer, discovered this:
+    # BUG in numpy OR more probably in MKL with conda!
+    # >>> numpy.linalg.solve(M, c)  returns all nans!
+    # But
+    # >>> numpy.linalg.matrix_rank(M)
+    # >>> numpy.linalg.solve(M, c)
+    # GIVES CORRECT ANSWER!!!!
+    #
+    # Switched to scipy.linalg.solve(M, c) which works!
+    return np.reshape(splsolve(M, c), (N+2, N+2)), ps, thetas, hp, htheta
 
 
 def dgdp_at_p_0(g, hp):

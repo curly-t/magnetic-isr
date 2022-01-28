@@ -49,7 +49,7 @@ def calc_complex_modulus(cal, **kwargs):
     # Sort system responses by frequency
     responses = sorted(measured_responses, key=lambda sys_resp: sys_resp.rod_freq)
 
-    rod, tub = get_Rod_and_Tub(system_responses)
+    rod, tub = get_Rod_and_Tub(responses)
 
     # Num points
     N = 30

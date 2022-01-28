@@ -21,7 +21,7 @@ def visualize_flowfield_polar(flowfield, ps, thetas):
 def visualize_flowfield_rect(flowfield):
     g = np.transpose(flowfield)
 
-    plt.imshow(g)
+    plt.imshow(np.real(g))
     plt.xlabel("p = log(r/a) [0, log(R/a)]")
     plt.ylabel("thetas [0, pi/2]")
     plt.show()

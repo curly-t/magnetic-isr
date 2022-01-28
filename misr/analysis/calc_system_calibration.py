@@ -209,7 +209,6 @@ def FDM_calibration(**kwargs):
             Re = rho * omega * ((gvalue(rod.d)/2.)**2) / eta    # Zaradi simulacije delamo z float in ne gvar samo tu.
             # ZDAJ TO NE DELUJE - VRNE SAMO Nans!!!!!!!!!!!!!!
             g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
-            print(g)
             flowfields[i] = g
             # ps, thetas, hp in htheta pa bodo vedno enaki, zato bodo tudi po zadnji iteraciji vredu za uporabo naprej v funkciji
 
@@ -245,7 +244,6 @@ def FDM_calibration(**kwargs):
 
     # USES METHOD "lm"
     best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True)
-    print("\nLEASTSQ!!!\n")
 
     # As described in the scipy.optimize.leastsq docs.
     cov = scaled_cov * np.var(min_func(best_params)) / (len(omegas) - 2)
