@@ -207,10 +207,8 @@ def FDM_calibration(**kwargs):
         flowfields = np.zeros(shape=(len(omegas), N+2, N+2), dtype=np.complex128)
         for i, omega in enumerate(omegas):
             Re = rho * omega * ((gvalue(rod.d)/2.)**2) / eta    # Zaradi simulacije delamo z float in ne gvar samo tu.
-            # ZDAJ TO NE DELUJE - VRNE SAMO Nans!!!!!!!!!!!!!!
             g, ps, thetas, hp, htheta = flowfield_FDM(N, max_p, 0.0, Re)
             flowfields[i] = g
-            # ps, thetas, hp in htheta pa bodo vedno enaki, zato bodo tudi po zadnji iteraciji vredu za uporabo naprej v funkciji
 
         def min_func(min_param):
             alpha, k = min_param[0], min_param[1]
@@ -243,7 +241,9 @@ def FDM_calibration(**kwargs):
     min_func, omegas = construct_min_func(30)
 
     # USES METHOD "lm"
-    best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True)
+    best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True, maxfev=5000)
+    # MAY FAIL IN WHICH CASE YOU MUST DO SOMETHINGGGG!!!!!!!!!
+    print(msg)
 
     # As described in the scipy.optimize.leastsq docs.
     cov = scaled_cov * np.var(min_func(best_params)) / (len(omegas) - 2)

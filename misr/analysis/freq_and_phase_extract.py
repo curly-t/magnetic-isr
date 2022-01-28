@@ -21,7 +21,7 @@ def running_average(input_array, averaging_len):
 
 def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     plot_bright_results=False, complex_drift=True, rod_led_phase_correct=True, exceptable_phase_insanity=0.1*np.pi,
-    ignore_extreme_rod_positions=True):
+    ignore_extreme_rod_positions=False):
     """ This function calculates the frequency of the vibration of the rod, the relative phase between
         the brightness modulation (current) and the response of the rod (position), and the amplitude of the rod response,
         from the results of rod tracking, and brightness logging.
@@ -108,6 +108,17 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     # GRDI GRDI GRDI GRDI TRY
     # TODO: --> TOLE MORAŠ LEPŠE ZAPISAT!!!!! -----------------------------------------------------------------
     try:
+        # TODO: BETTER FITTING STRATEGY!!!!!
+        # TRY FILTERING WITH FFT
+        amplitudes = np.fft.rfft(gvalue(measrmnt.positions))
+        freqs = np.fft.rfftfreq(len(measrmnt.positions), d=gvalue(measrmnt.times[1] - measrmnt.times[0]))
+        print(measrmnt.Ifreq)
+        print(freqs)
+        plt.plot(freqs, np.square(np.abs(amplitudes)))
+        plt.show()
+        # JUST A TRY
+
+
         if ignore_extreme_rod_positions:
             nonzero_elems = np.flatnonzero(measrmnt.positions)
             fit_times = gvalue(measrmnt.times)[nonzero_elems]
