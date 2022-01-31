@@ -84,9 +84,9 @@ def get_drift_on_valid_ranges(gvar_data, measrmnt, valid_ranges, data_coefs):
             # OK avg_len
             avging[i] = 1
             drifts.append(running_average(gvar_data[valid[0] : valid[1]], averaging_len))
-
             drift_start_offset = averaging_len//2
             drift_stop_offset = -(averaging_len - averaging_len//2) + 1
+
             times.append(measrmnt.times[valid[0] : valid[1]][drift_start_offset:drift_stop_offset])
             new_valid_ranges[i] += np.array([drift_start_offset, -drift_stop_offset])
         else:
@@ -99,9 +99,7 @@ def get_drift_on_valid_ranges(gvar_data, measrmnt, valid_ranges, data_coefs):
 
 def smooth_drift(drift, time, eval_times, smoothing_factor=0.1):
     # SAVGOL NE MORE FITTAT UNREGULAR DATAPOINTS - SPLINE PA SEVEDA LAHKO!!! :)
-    # spline_rep_tuple = splrep(gvalue(time), gvalue(drift), k=3, s=0.2 * (len(drift)-np.sqrt(2*len(drift))))
-    spline_rep_tuple = splrep(gvalue(time), gvalue(drift), w=sdev(drift), k=3, s=smoothing_factor * len(drift))
-
+    spline_rep_tuple, fp, ier, msg = splrep(gvalue(time), gvalue(drift), w=1/sdev(drift), k=3, s=smoothing_factor * len(drift), full_output=True)
     return splev(gvalue(eval_times), spline_rep_tuple)
 
 
@@ -200,6 +198,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     if plot_bright_results:
         fig, (ax_bright, ax_drift) = plt.subplots(1, 2)
         ax_bright.plot(gvalue(measrmnt.times), gvalue(measrmnt.brights), 'y-', label="Bright")
+        plt.suptitle(f"Brightness, freq={gvalue(measrmnt.Ifreq):.3f}")
     valid_indexes = identify_noninterupted_valid_idxs(measrmnt.brights, 0, 255)
     valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes, len(measrmnt.brights))
     valid_brights, valid_times = concat_valid_data_and_time(measrmnt.brights, measrmnt.times, valid_ranges)
@@ -210,7 +209,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     valid_drift, new_valid_times, new_valid_ranges = get_drift_on_valid_ranges(measrmnt.brights, measrmnt, valid_ranges, bright_coefs)
     if plot_bright_results:
         ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b-", label="valid bright drift")
-    smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, 0.1)
+    smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, 50.)
     if plot_bright_results:
         ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'y--', label="Smooth extended bright drift")
         if not bandfilter_smooth_drift:
@@ -235,6 +234,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
         plt.plot(gvalue(valid_driftless_times), gvalue(valid_driftless_brights), 'b-', label="Driftless Brights")
         plt.plot(gvalue(valid_driftless_times), gvalue(sinusoid_w_drift(valid_driftless_times, *bright_coefs)), 'k-', label="Fit")
         plt.legend()
+        plt.suptitle(f"Brightness, freq={gvalue(measrmnt.Ifreq):.3f}")
         plt.show()
     # END --------------------------------------------------------------------------------------------------------------
 
@@ -243,7 +243,8 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
     # FITTING of POSITION DATA -----------------------------------------------------------------------------------------
     if plot_track_results:
         fig, (ax_position, ax_drift) = plt.subplots(1, 2)
-        ax_position.plot(gvalue(measrmnt.times), gvalue(measrmnt.positions), 'y-', label="Position")
+        ax_position.plot(gvalue(measrmnt.times), gvalue(measrmnt.positions), 'y-', label="Positin")
+        plt.suptitle(f"Positions, freq={gvalue(measrmnt.Ifreq):.3f}")
     valid_indexes = identify_noninterupted_valid_idxs(measrmnt.positions, 1, measrmnt.x_pixels-1)
     valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes, len(measrmnt.positions))
     valid_positions, valid_times = concat_valid_data_and_time(measrmnt.positions, measrmnt.times, valid_ranges)
@@ -255,7 +256,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
                                                                                pos_coefs)
     if plot_track_results:
         ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b-", label="valid pos drift")
-    smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, 0.1)
+    smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, 50.)
     if plot_track_results:
         ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'y--', label="Smooth extended pos drift")
         if not bandfilter_smooth_drift:
@@ -282,6 +283,7 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
         plt.plot(gvalue(valid_driftless_times), gvalue(sinusoid_w_drift(valid_driftless_times, *pos_coefs)), 'k-',
                  label="Fit")
         plt.legend()
+        plt.suptitle(f"Positions, freq={gvalue(measrmnt.Ifreq):.3f}")
         plt.show()
     # END --------------------------------------------------------------------------------------------------------------
 

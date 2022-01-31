@@ -34,6 +34,9 @@ class Measurement:
         self.positions = gvar(trackData[:, 2], np.ones(self.numFrames)*0.5)         # Assuming half pixel of resolution
         self.brights = gvar(trackData[:, 3], np.ones(self.numFrames)/np.sqrt(100))  # Assuming calc by 10x10 average
 
+        # Preveri če so kateri časi PODOVOJENI - TO RADO DELA SEDAJ, PA JE FUL NADLEŽNO IN SLABO!
+
+
     def date_of_last_mod(self):
         return datetime.fromtimestamp(self.timestamp_of_last_mod).strftime('%Y-%m-%d %H:%M:%S')
 
