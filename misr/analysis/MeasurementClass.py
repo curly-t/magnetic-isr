@@ -50,8 +50,8 @@ class Measurement:
         else:
             print("IMPORTING MEASUREMENT WITHOUT MEASUREMENT CONFIG FILE!")
             print("DEFAULT MODE 600 x 960 pixels ASSUMED!!!!!!")
-            self.x_pixels = 0.00000296      # DEFAULT VALUE FOR 600x960
-            self.pixel_size = 960
+            self.x_pixels = 960
+            self.pixel_size = 0.00000296      # DEFAULT VALUE FOR 600x960
             self.rod_id, self.tub_id = guess_rod_and_tub([self.dirname])
             # If found nothing - returned rod and tub ids will be None
 
