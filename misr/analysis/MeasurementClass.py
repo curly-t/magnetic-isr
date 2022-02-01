@@ -26,6 +26,12 @@ class Measurement:
         # The trackData array is comprised of 4 columns:
         # frameIdx, frameTime, rodEdgePos, brightness
         trackData = np.loadtxt(filepath)
+        # Preveri če so kateri časi PODOVOJENI - TO RADO DELA SEDAJ, PA JE FUL NADLEŽNO IN SLABO!
+        non_duplicate_idxs = self.check_for_duplicate_data(trackData)
+        trackData = trackData[non_duplicate_idxs]
+        # Set maximum number of points - 20 per cycle, 15 cycles
+        selected_points = self.dilute_number_of_points(len(trackData), 20 * 15)
+        trackData = trackData[selected_points]
         self.timeLength = trackData[-1, 1] - trackData[0, 1]
         self.numFrames = len(trackData)
 
@@ -33,9 +39,6 @@ class Measurement:
         self.times = gvar(trackData[:, 1], np.ones(self.numFrames)*0.0005)          # Assuming 0.5 ms error in time
         self.positions = gvar(trackData[:, 2], np.ones(self.numFrames)*0.5)         # Assuming half pixel of resolution
         self.brights = gvar(trackData[:, 3], np.ones(self.numFrames)/np.sqrt(100))  # Assuming calc by 10x10 average
-
-        # Preveri če so kateri časi PODOVOJENI - TO RADO DELA SEDAJ, PA JE FUL NADLEŽNO IN SLABO!
-
 
     def date_of_last_mod(self):
         return datetime.fromtimestamp(self.timestamp_of_last_mod).strftime('%Y-%m-%d %H:%M:%S')
@@ -57,6 +60,19 @@ class Measurement:
             self.pixel_size = 0.00000296      # DEFAULT VALUE FOR 600x960
             self.rod_id, self.tub_id = guess_rod_and_tub([self.dirname])
             # If found nothing - returned rod and tub ids will be None
+
+    def check_for_duplicate_data(self, trackdata):
+        non_duplicates = np.where(trackdata[:-1, 1] != trackdata[1:, 1])[0]
+        if trackdata[-1, 1] != trackdata[-2, 1]:
+            non_duplicates = np.array(list(non_duplicates) + [len(trackdata) - 1])
+        return non_duplicates
+
+    def dilute_number_of_points(self, num_points, max_num):
+        if num_points > max_num:
+            selected_indices = np.int0(np.linspace(0, num_points-1, num=max_num))
+            return selected_indices
+        else:
+            return np.arange(num_points)
 
 
 # Če bo potrebno kasneje devat vse iz iste mape v measurement run! :)
