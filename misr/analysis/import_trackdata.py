@@ -54,10 +54,10 @@ def filter_filepaths_by_ampl_offs_freq(filepaths, Iampl="*", Ioffs="*", Ifreq="*
     return filtered_filepaths
 
 
-def filter_filepaths_by_keywords(filepaths, keyword_list):
+def filter_filepaths_by_keywords(filepaths, keyword_list=None):
     # Filters by keywords. The dirname must containt at least one of them to be selected.
     # If keyword_list is an empyt list, no filering is done!
-    if len(keyword_list) == 0:
+    if keyword_list is None:
         return filepaths
     else:
         filtered_filepaths = []
@@ -72,17 +72,17 @@ def filter_filepaths_by_keywords(filepaths, keyword_list):
         return filtered_filepaths
 
 
-def import_filepaths(filepaths):
+def import_filepaths(filepaths, **kwargs):
     measurements = []
     for filepath in filepaths:
-        measurements.append(Measurement(filepath))
+        measurements.append(Measurement(filepath, **kwargs))
     # TODO: GROUP INTO MEASUREMENT RUNS 
     # TODO: Introduce the possibility of changing to different micorscope lenses --> differing pixelSize
     # FOR NOW - pixel_size hardcoded into the MeasurementObject
     return measurements
 
 
-def select_filter_import_data(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[]):
+def select_filter_import_data(**kwargs):
     """
         This function lets you first select the data folders from which you want to import trackdata measurements,
         then it filters all found .dat filepaths by the current amplitude, offset and frequency. At last if
@@ -100,10 +100,12 @@ def select_filter_import_data(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[]):
 
     # Filter filepaths
     filepaths = get_dotdat_filepaths_from_selected_dirs(sdirs)
-    filepaths = filter_filepaths_by_ampl_offs_freq(filepaths, Iampl=Iampl, Ioffs=Ioffs, Ifreq=Ifreq)
-    filepaths = filter_filepaths_by_keywords(filepaths, keyword_list)
+    filepaths = filter_filepaths_by_ampl_offs_freq(filepaths, **{k: v for (k, v) in kwargs.items()
+                                                                 if k in ["Ifreq", "Ioffs", "Iampl"]})
+    filepaths = filter_filepaths_by_keywords(filepaths, kwargs.get("keyword_list", None))
 
     # Import data files as measurement objects
-    measurements = import_filepaths(filepaths)
+    measurements = import_filepaths(filepaths, **{k: v for (k, v) in kwargs.items()
+                                                  if k in ["filter_duplicates", "max_num_points"]})
 
     return measurements

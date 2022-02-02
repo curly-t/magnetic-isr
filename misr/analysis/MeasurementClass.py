@@ -7,7 +7,7 @@ from ..utils.get_rod_and_tub_info import guess_rod_and_tub
 
 
 class Measurement:
-    def __init__(self, filepath):
+    def __init__(self, filepath, filter_duplicates=True, max_num_points=300):
         # Information about the filepath, filename and filedir
         self.filepath = filepath
         self.filename = os.path.split(filepath)[1]
@@ -23,18 +23,19 @@ class Measurement:
 
         self.import_measurement_config()
 
+        trackData = np.loadtxt(filepath)
+        if filter_duplicates:
+            non_duplicate_idxs = self.filter_duplicate_data(trackData)
+            trackData = trackData[non_duplicate_idxs]
+
+        if max_num_points is not None:
+            selected_points = self.dilute_number_of_points(len(trackData), max_num_points)
+            trackData = trackData[selected_points]
+
         # The trackData array is comprised of 4 columns:
         # frameIdx, frameTime, rodEdgePos, brightness
-        trackData = np.loadtxt(filepath)
-        # Preveri če so kateri časi PODOVOJENI - TO RADO DELA SEDAJ, PA JE FUL NADLEŽNO IN SLABO!
-        non_duplicate_idxs = self.check_for_duplicate_data(trackData)
-        trackData = trackData[non_duplicate_idxs]
-        # Set maximum number of points - 20 per cycle, 15 cycles
-        selected_points = self.dilute_number_of_points(len(trackData), 20 * 15)
-        trackData = trackData[selected_points]
         self.timeLength = trackData[-1, 1] - trackData[0, 1]
         self.numFrames = len(trackData)
-
         self.frameIdxs = trackData[:, 0]                                            # There can be no error in index
         self.times = gvar(trackData[:, 1], np.ones(self.numFrames)*0.0005)          # Assuming 0.5 ms error in time
         self.positions = gvar(trackData[:, 2], np.ones(self.numFrames)*0.5)         # Assuming half pixel of resolution
@@ -61,7 +62,7 @@ class Measurement:
             self.rod_id, self.tub_id = guess_rod_and_tub([self.dirname])
             # If found nothing - returned rod and tub ids will be None
 
-    def check_for_duplicate_data(self, trackdata):
+    def filter_duplicate_data(self, trackdata):
         non_duplicates = np.where(trackdata[:-1, 1] != trackdata[1:, 1])[0]
         if trackdata[-1, 1] != trackdata[-2, 1]:
             non_duplicates = np.array(list(non_duplicates) + [len(trackdata) - 1])

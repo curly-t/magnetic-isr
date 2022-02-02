@@ -41,7 +41,7 @@ def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.0
 
 def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5, post_tracking_wait=2,
         max_measurement_time=420, num_periods=15, min_num_periods=4, pixel_safety_margin=100, dynamic_amplitude=True,
-        datapoints_per_period=20, dynamic_framerate=True, min_framerate=6):
+        datapoints_per_period=20, dynamic_framerate=True, min_framerate=None):
 
     """ Runs the measurement run for all requested frequencies, at starting amplitude and offset settings.
         The measurement run consists of:
@@ -94,6 +94,8 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
 
     hw_conf = get_hw_config()
     max_framerate = float(input("Please input the maximum framerate: "))
+    if min_framerate is None:
+        min_framerate = float(input("Please input the minimum framerate: "))
 
     check_freqs(freqs, max_measurement_time, min_num_periods, datapoints_per_period, max_framerate)
     time_run(freqs, pre_tracking_wait, post_tracking_wait, max_measurement_time, num_periods)

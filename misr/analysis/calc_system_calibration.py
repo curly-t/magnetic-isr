@@ -158,7 +158,6 @@ high_border = 0.5
 
 
 def simple_calibration(**kwargs):
-    kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
 
     rod, tub = get_Rod_and_Tub(system_responses)
@@ -185,10 +184,11 @@ def simple_calibration(**kwargs):
     return calibration
 
 
-def FDM_calibration(**kwargs):
-    """ NOT CONVERGING TILL THE GVAR IMPLEMENTATION! """
+def FDM_calibration(cal_params={}, **kwargs):
+    default_params = {"N": 30, "leastsq_y0": np.array([1e-7, 1e-7]), "leastsq_ftol": 1e-12, "leastsq_maxfev": 5000}
+    default_params.update(cal_params)
+    cal_params = default_params
 
-    kwargs["keyword_list"] = kwargs.get("keyword_list", []) + ["water"]
     system_responses = select_and_analyse(**kwargs)
 
     # Sort system responses by frequency
@@ -238,12 +238,12 @@ def FDM_calibration(**kwargs):
 
         return min_func, omegas
 
-    min_func, omegas = construct_min_func(30)
+    min_func, omegas = construct_min_func(cal_params["N"])
 
     # USES METHOD "lm"
-    best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, np.array([1e-7, 1e-7]), ftol=1e-12, full_output=True, maxfev=5000)
-    # MAY FAIL IN WHICH CASE YOU MUST DO SOMETHINGGGG!!!!!!!!!
-    print(msg)
+    best_params, scaled_cov, info_dict, msg, ier = leastsq(min_func, cal_params["leastsq_y0"], full_output=True,
+                                                           ftol=cal_params["leastsq_ftol"],
+                                                           maxfev=cal_params["leastsq_maxfev"])
 
     # As described in the scipy.optimize.leastsq docs.
     cov = scaled_cov * np.var(min_func(best_params)) / (len(omegas) - 2)

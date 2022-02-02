@@ -52,15 +52,13 @@ def sinusoid_w_drift(t, A, freq, phase, const, speed):
     return A * np.sin(2*np.pi*freq * t + phase) + const + speed * t
 
 
-def fit_sinus_w_drift(gvar_fit_data, gvar_fit_time, central_freq, timeLen, phase_start=0.0, exceptable_phase_insanity=0.0):
+def fit_sinus_w_drift(gvar_fit_data, gvar_fit_time, central_freq, timeLen, phase_start=0.0):
     min_data = np.min(gvar_fit_data)
     max_data = np.max(gvar_fit_data)
 
-    low_bound_data = gvalue([0.5 * (max_data - min_data) / 2., central_freq * 0.8,
-                             phase_start,
+    low_bound_data = gvalue([0.5 * (max_data - min_data) / 2., central_freq * 0.8, phase_start,
                              min_data, -(max_data - min_data) / timeLen])
-    high_bound_data = gvalue([1.2 * (max_data - min_data) / 2., central_freq * 1.2,
-                              phase_start + 2 * np.pi + exceptable_phase_insanity,
+    high_bound_data = gvalue([1.2 * (max_data - min_data) / 2., central_freq * 1.2, phase_start + 2 * np.pi,
                               max_data, (max_data - min_data) / timeLen])
 
     try:
@@ -83,16 +81,16 @@ def get_drift_on_valid_ranges(gvar_data, measrmnt, valid_ranges, data_coefs):
         if 2 < averaging_len < 0.5 * (valid[1] - valid[0]):
             # OK avg_len
             avging[i] = 1
-            drifts.append(running_average(gvar_data[valid[0] : valid[1]], averaging_len))
+            drifts.append(running_average(gvar_data[valid[0]: valid[1]], averaging_len))
             drift_start_offset = averaging_len//2
             drift_stop_offset = -(averaging_len - averaging_len//2) + 1
 
             times.append(measrmnt.times[valid[0]: valid[1]][drift_start_offset:drift_stop_offset])
-            new_valid_ranges[i] += np.array([drift_start_offset, -drift_stop_offset])
+            new_valid_ranges[i] += np.array([drift_start_offset, drift_stop_offset - 1])
         else:
             # Too short or too long avg_len - one should use just the values given with fitting of sinus + simple drift
-            drifts.append(data_coefs[3] + data_coefs[4] * measrmnt.times[valid[0] : valid[1]])
-            times.append(measrmnt.times[valid[0] : valid[1]])
+            drifts.append(data_coefs[3] + data_coefs[4] * measrmnt.times[valid[0]: valid[1]])
+            times.append(measrmnt.times[valid[0]: valid[1]])
 
     return np.concatenate(drifts), np.concatenate(times), new_valid_ranges
 
@@ -106,10 +104,11 @@ def smooth_drift(drift, time, eval_times, smoothing_factor=0.1):
 def determine_bandreject_params(data_coefs, expected_freq, factor):
     fit_freq = data_coefs[1]
 
-    bandreject_center = gvalue((fit_freq + expected_freq) / 2)
+    bandreject_center = gvalue(fit_freq)
 
-    freq_discrep = fit_freq - expected_freq
-    bandreject_width = factor * (np.abs(gvalue(freq_discrep)) + np.abs(2*sdev(freq_discrep)))
+    # freq_discrep = fit_freq - expected_freq
+    # bandreject_width = factor * (np.abs(gvalue(freq_discrep)) + np.abs(2*sdev(freq_discrep)))
+    bandreject_width = factor * bandreject_center
 
     return bandreject_width, bandreject_center
 
@@ -119,7 +118,6 @@ def remove_freqs_near_expected_freq(drift, time, bandreject_width, bandreject_ce
         # Če je dolžina liha: naredi jo sodo samo za tale del
         whole_drift = drift[:]
         drift = drift[:-1]
-        whole_time = time[:]
         time = time[:-1]
     else:
         whole_drift = drift
@@ -139,24 +137,12 @@ def remove_freqs_near_expected_freq(drift, time, bandreject_width, bandreject_ce
     win_ideal_stop = int(win_center + (win_width - 1)/2 + 1)
 
     win_start = max(0, win_ideal_start)
-    win_stop = min(len(drift), win_ideal_stop)
-    # win_left_cut = max(0, -win_ideal_start)
-    # win_right_cut = min(win_width, len(drift) - win_ideal_stop)
+    win_stop = min(len(fft_freqs), win_ideal_stop)
 
-    # plt.plot(fft_freqs, np.abs(fft_ampls), label="before")
     edge_points = np.array([win_start, win_stop-1])
     linecoefs = np.polyfit(fft_freqs[edge_points], fft_ampls[edge_points], deg=1)
     line = np.poly1d(linecoefs)
     fft_ampls[win_start:win_stop] = line(fft_freqs[win_start:win_stop])
-
-    # plt.plot(fft_freqs, np.abs(fft_ampls), label="after")
-    # plt.legend()
-    # plt.show()
-    #
-    # plt.plot(gvalue(time), np.fft.irfft(fft_ampls) + polyapprox(gvalue(time)), label="after")
-    # plt.plot(gvalue(time), gvalue(drift), label="before")
-    # plt.legend()
-    # plt.show()
 
     if len(whole_drift) % 2 != 0:
         res = np.zeros_like(whole_drift)
@@ -171,8 +157,64 @@ def subtract_drift_from_data_on_valid_ranges(drift, data, time, valid_ranges):
     return concat_valid_data_and_time(data - drift, time, valid_ranges)
 
 
-def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
-    plot_bright_results=False, bandfilter_smooth_drift=True, rod_led_phase_correct=True, exceptable_phase_insanity=0.1*np.pi):
+def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_limit,
+                            smoothing_factor=10, bandreject_width_factor=0.5, plot_results=False, phase_start=0.0,
+                            bandfilter_drift=True):
+    if plot_results:
+        fig, (ax_data, ax_drift) = plt.subplots(1, 2)
+        ax_data.plot(gvalue(measrmnt.times), gvalue(gvar_data), 'y-', label="Data")
+        plt.suptitle(f"freq={gvalue(measrmnt.Ifreq):.3f}")
+    valid_indexes = identify_noninterupted_valid_idxs(gvar_data, low_limit, high_limit)
+    valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes)
+    valid_data, valid_times = concat_valid_data_and_time(gvar_data, measrmnt.times, valid_ranges)
+    if plot_results:
+        ax_data.plot(gvalue(valid_times), gvalue(valid_data), 'g--', label="Valid data")
+        ax_data.legend()
+    data_coefs = fit_sinus_w_drift(valid_data, valid_times, expected_freq, measrmnt.timeLength,
+                                   phase_start)
+    valid_drift, new_valid_times, new_valid_ranges = get_drift_on_valid_ranges(gvar_data, measrmnt, valid_ranges, data_coefs)
+    if plot_results:
+        ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b-", label="Valid drift")
+    smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, smoothing_factor)
+    if plot_results:
+        ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'y--', label="Smooth extended drift")
+        if not bandfilter_drift:
+            ax_drift.legend()
+            plt.show()
+
+    if bandfilter_drift:
+        bandreject_width, bandreject_center = determine_bandreject_params(data_coefs, expected_freq, bandreject_width_factor)
+        smoothed_drift = remove_freqs_near_expected_freq(smoothed_drift, measrmnt.times, bandreject_width,
+                                                                bandreject_center)
+        if plot_results:
+            ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), "k--", label="Final drift")
+            ax_drift.legend()
+            plt.show()
+
+    valid_driftless_data, valid_driftless_times = subtract_drift_from_data_on_valid_ranges(smoothed_drift,
+                                                                                           gvar_data,
+                                                                                           measrmnt.times,
+                                                                                           new_valid_ranges)
+    data_coefs = fit_sinus_w_drift(valid_driftless_data, valid_driftless_times, expected_freq, measrmnt.timeLength,
+                                   phase_start)
+    if plot_results:
+        plt.plot(gvalue(valid_driftless_times), gvalue(valid_driftless_data), 'b-', label="Driftless data")
+        plt.plot(gvalue(valid_driftless_times), gvalue(sinusoid_w_drift(valid_driftless_times, *data_coefs)), 'k-', label="Fit")
+        plt.legend()
+        plt.suptitle(f"freq={gvalue(measrmnt.Ifreq):.3f}")
+        plt.show()
+
+    return data_coefs
+
+
+def check_for_freq_discrepancy(bright_coefs, pos_coefs, func_params):
+    # Check for frequency discrepancy
+    relative_discrep = gvalue((bright_coefs[1] - pos_coefs[1])/bright_coefs[1])
+    if m.fabs(relative_discrep) >= func_params["freq_err"]:
+        warnings.warn(f"Rel. freq. err: Brightness freq: {bright_coefs[1]} Position freq: {pos_coefs[1]}")
+
+
+def freq_phase_ampl(measrmnt, fitting_params={}, fpa_params={}):
     """ This function calculates the frequency of the vibration of the rod, the relative phase between
         the brightness modulation (current) and the response of the rod (position), and the amplitude of the rod response,
         from the results of rod tracking, and brightness logging.
@@ -180,17 +222,6 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
         Inputs:
             measrmnt            --> The Measurement data object.
                 measrmnt.trackData   ...    The data from rod tracking under the influence of changing magnetic fields.
-
-                                            The trackData array is comprised of 4 columns:
-                                            frameIdx, frameTime, rodEdgePos, brightnes
-
-                                            Time is logged in seconds, and rodEdgePos in pixels.
-                                            Brightness has arbitrary linear values.
-
-                                            ***************************************************************************
-                                            ALWAYS USE measrmnt.positions (gvars)
-                                            instead of measrnmnt.trackData[:, 2] (floats!!!)
-                                            ***************************************************************************
 
             freq_err            --> The maximum relative discrepancy permitted between measured brihtness modulation and rod position modulation frequency.
                                     If the relative discrepancy is greater, the function returns a UserWarning
@@ -215,136 +246,46 @@ def freq_phase_ampl(measrmnt, freq_err=0.1, plot_track_results=False,
 
         """
 
-    # FITTING of BRIGHTNESS DATA ---------------------------------------------------------------------------------------
-    if plot_bright_results:
-        fig, (ax_bright, ax_drift) = plt.subplots(1, 2)
-        ax_bright.plot(gvalue(measrmnt.times), gvalue(measrmnt.brights), 'y-', label="Bright")
-        plt.suptitle(f"Brightness, freq={gvalue(measrmnt.Ifreq):.3f}")
-    valid_indexes = identify_noninterupted_valid_idxs(measrmnt.brights, 0, 255)
-    valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes)
-    valid_brights, valid_times = concat_valid_data_and_time(measrmnt.brights, measrmnt.times, valid_ranges)
-    if plot_bright_results:
-        ax_bright.plot(gvalue(valid_times), gvalue(valid_brights), 'g--', label="Valid")
-        ax_bright.legend()
-    bright_coefs = fit_sinus_w_drift(valid_brights, valid_times, measrmnt.Ifreq, measrmnt.timeLength)
-    valid_drift, new_valid_times, new_valid_ranges = get_drift_on_valid_ranges(measrmnt.brights, measrmnt, valid_ranges, bright_coefs)
-    if plot_bright_results:
-        ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b-", label="valid bright drift")
-    smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, 10)
-    if plot_bright_results:
-        ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'y--', label="Smooth extended bright drift")
-        if not bandfilter_smooth_drift:
-            ax_drift.legend()
-            plt.show()
+    func_params = {"plot_bright_results": False, "plot_track_results": False,
+                   "freq_err": 0.1, "rod_led_phase_correct": True}
+    func_params.update(fpa_params)
 
-    if bandfilter_smooth_drift:
-        bandreject_width, bandreject_center = determine_bandreject_params(bright_coefs, measrmnt.Ifreq, 100)
-        bandreject_width = gvalue(0.4 * measrmnt.Ifreq)
-        smoothed_drift = remove_freqs_near_expected_freq(smoothed_drift, measrmnt.times, bandreject_width,
-                                                                bandreject_center)
-        if plot_bright_results:
-            ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), "k--", label="final drift")
-            ax_drift.legend()
-            plt.show()
+    bright_coefs = perform_fitting_on_data(measrmnt.brights, measrmnt, measrmnt.Ifreq, 0, 255,
+                                           plot_results=func_params["plot_bright_results"], **fitting_params)
 
-    valid_driftless_brights, valid_driftless_times = subtract_drift_from_data_on_valid_ranges(smoothed_drift,
-                                                                                              measrmnt.brights,
-                                                                                              measrmnt.times,
-                                                                                              new_valid_ranges)
-    bright_coefs = fit_sinus_w_drift(valid_driftless_brights, valid_driftless_times, measrmnt.Ifreq, measrmnt.timeLength)
-    if plot_bright_results:
-        plt.plot(gvalue(valid_driftless_times), gvalue(valid_driftless_brights), 'b-', label="Driftless Brights")
-        plt.plot(gvalue(valid_driftless_times), gvalue(sinusoid_w_drift(valid_driftless_times, *bright_coefs)), 'k-', label="Fit")
-        plt.legend()
-        plt.suptitle(f"Brightness, freq={gvalue(measrmnt.Ifreq):.3f}")
-        plt.show()
-    # END --------------------------------------------------------------------------------------------------------------
+    pos_coefs = perform_fitting_on_data(measrmnt.positions, measrmnt, bright_coefs[1], 1, measrmnt.x_pixels - 1,
+                                        plot_results=func_params["plot_track_results"],
+                                        phase_start=bright_coefs[2] - 2*np.pi, **fitting_params)
 
-
-
-    # FITTING of POSITION DATA -----------------------------------------------------------------------------------------
-    if plot_track_results:
-        fig, (ax_position, ax_drift) = plt.subplots(1, 2)
-        ax_position.plot(gvalue(measrmnt.times), gvalue(measrmnt.positions), 'y-', label="Positin")
-        plt.suptitle(f"Positions, freq={gvalue(measrmnt.Ifreq):.3f}")
-    valid_indexes = identify_noninterupted_valid_idxs(measrmnt.positions, 1, measrmnt.x_pixels-1)
-    valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes)
-    valid_positions, valid_times = concat_valid_data_and_time(measrmnt.positions, measrmnt.times, valid_ranges)
-    if plot_track_results:
-        ax_position.plot(gvalue(valid_times), gvalue(valid_positions), 'g--', label="Valid")
-        ax_position.legend()
-    pos_coefs = fit_sinus_w_drift(valid_positions, valid_times, measrmnt.Ifreq, measrmnt.timeLength,
-                                  bright_coefs[2] - 2*np.pi)
-    valid_drift, new_valid_times, new_valid_ranges = get_drift_on_valid_ranges(measrmnt.positions, measrmnt, valid_ranges,
-                                                                               pos_coefs)
-    if plot_track_results:
-        ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b-", label="valid pos drift")
-    smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, 10)
-    if plot_track_results:
-        ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'y--', label="Smooth extended pos drift")
-        if not bandfilter_smooth_drift:
-            ax_drift.legend()
-            plt.show()
-
-    if bandfilter_smooth_drift:
-        bandreject_width, bandreject_center = determine_bandreject_params(pos_coefs, measrmnt.Ifreq, 100)
-        bandreject_width = gvalue(0.4 * measrmnt.Ifreq)
-        smoothed_drift = remove_freqs_near_expected_freq(smoothed_drift, measrmnt.times, bandreject_width,
-                                                                bandreject_center)
-        if plot_track_results:
-            ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), "k--", label="final drift")
-            ax_drift.legend()
-            plt.show()
-
-    valid_driftless_positions, valid_driftless_times = subtract_drift_from_data_on_valid_ranges(smoothed_drift,
-                                                                                              measrmnt.positions,
-                                                                                              measrmnt.times,
-                                                                                              new_valid_ranges)
-    pos_coefs = fit_sinus_w_drift(valid_driftless_positions, valid_driftless_times, measrmnt.Ifreq,
-                                     measrmnt.timeLength, bright_coefs[2] - 2*np.pi)
-    if plot_track_results:
-        plt.plot(gvalue(valid_driftless_times), gvalue(valid_driftless_positions), 'b-', label="Driftless Position")
-        plt.plot(gvalue(valid_driftless_times), gvalue(sinusoid_w_drift(valid_driftless_times, *pos_coefs)), 'k-',
-                 label="Fit")
-        plt.legend()
-        plt.suptitle(f"Positions, freq={gvalue(measrmnt.Ifreq):.3f}")
-        plt.show()
-    # END --------------------------------------------------------------------------------------------------------------
-
-
-    # Check for frequency discrepancy
-    relative_discrep = gvalue((bright_coefs[1] - pos_coefs[1])/bright_coefs[1])
-    if m.fabs(relative_discrep) >= freq_err:
-        warnings.warn("Relativna razlika v frekvencah dobljenih iz brightness data in position data je vecja od {0}".format(freq_err) +
-        "\nBrightness freq: {0}\nPosition freq: {1}".format(bright_coefs[1], pos_coefs[1]))
+    check_for_freq_discrepancy(bright_coefs, pos_coefs, func_params)
 
     result_dict = {"rod_freq": pos_coefs[1], "rod_ampl": pos_coefs[0], "rod_phase": pos_coefs[2] - bright_coefs[2]}
 
-    # BECAUSE PHASE OF THE ROD AND PHASE OF THE LED ARE RECORDED DIFFERENTLY - THERE APPEARS AN ADDITIONAL 180 PHASE DIFFERENCE
-    # CORRECT FOR PHASE DIFFERENCE
-    if rod_led_phase_correct:
+    if func_params["rod_led_phase_correct"]:
+        # BECAUSE ROD AND LED PHASES ARE RECORDED SUCH THAT THERE APPEARS AN ADDITIONAL 180 PHASE DIFFERENCE
         result_dict["rod_phase"] += np.pi
 
     mean_rod_position = np.sum(measrmnt.positions)/len(measrmnt.positions)
 
-    print(result_dict)
-    return SingleResult(result_dict, measrmnt, exceptable_phase_insanity, mean_rod_position)
+    return SingleResult(result_dict, measrmnt, mean_rod_position)
 
 
-def select_and_analyse(Iampl="*", Ioffs="*", Ifreq="*", keyword_list=[], bandfilter_smooth_drift=True,
-                       plot_track_results=False, plot_bright_results=False, rod_led_phase_correct=True,
-                       filter_for_wierd_phases=True, exceptable_phase_insanity=0.1*np.pi, freq_err=0.01):
+def select_and_analyse(import_params={}, **kwargs):
 
     """Returns a list of all acceptable system responses in selected direcotries"""
 
-    measurements = select_filter_import_data(Iampl=Iampl, Ioffs=Ioffs, Ifreq=Ifreq, keyword_list=keyword_list)
+    default_import_params = {"filter_wierd_phases": True}
+    default_import_params.update(import_params)
+    import_params = default_import_params
+
+    measurements = select_filter_import_data(**{k: v for (k, v) in import_params.items() if k != "filter_wierd_phases"})
     system_responses = []
     for measrmnt in measurements:
-        sys_resp = freq_phase_ampl(measrmnt, freq_err=freq_err, plot_track_results=plot_track_results,
-                                   plot_bright_results=plot_bright_results, bandfilter_smooth_drift=bandfilter_smooth_drift,
-                                   rod_led_phase_correct=rod_led_phase_correct, exceptable_phase_insanity=exceptable_phase_insanity)
+        sys_resp = freq_phase_ampl(measrmnt,
+                                   fpa_params=kwargs.get("fpa_params", {}),
+                                   fitting_params=kwargs.get("fitting_params", {}))
 
-        if filter_for_wierd_phases:
+        if import_params["filter_wierd_phases"]:
             if not sys_resp.phase_sanity_check():
                 system_responses.append(sys_resp)
             else:
