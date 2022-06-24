@@ -8,6 +8,7 @@ from functools import cache
 from ..analysis.freq_and_phase_extract import freq_phase_ampl
 from ..analysis.import_trackdata import import_filepaths
 from gvar import mean as gvalue
+from ..utils.save_and_get_results import save_response_to_txt
 
 
 @cache
@@ -295,8 +296,15 @@ def ask_do_you_want_to_continue(warning=None, s=None):
 def calc_new_dynamic_ampl(offset, ampl, full_filepath, pixel_safety_margin, hw_conf):
     measurement = import_filepaths([full_filepath])[0]
     res = freq_phase_ampl(measurement)
+    # Ime za shranit file!
+    folder_name = path.split(full_filepath)[0]
+    experiment_foldername = path.split(folder_name)[1]
+    date_foldername = path.split(path.split(folder_name)[0])[1]
+    full_export_filename = path.join(folder_name, f"{date_foldername}_{experiment_foldername}.txt")
+    save_response_to_txt(res, full_export_filename)    # Zraven še shranimo!
+    # Izračuna faktorje in vse te stvari
     current_factor = (hw_conf["x_pixels"] - pixel_safety_margin - res.rod_mean) / gvalue(res.rod_ampl)
-    ampl = min(hw_conf["max_current"] - offset, ampl * current_factor)
+    ampl = max(0.001, min(hw_conf["max_current"] - offset, ampl * current_factor))
     print(f"New amplitude {ampl}A.")
     return ampl
 

@@ -165,7 +165,7 @@ def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_
         ax_data.plot(gvalue(measrmnt.times), gvalue(gvar_data), 'y-', label="Data")
         plt.suptitle(f"freq={gvalue(measrmnt.Ifreq):.3f}")
     valid_indexes = identify_noninterupted_valid_idxs(gvar_data, low_limit, high_limit)
-    valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes)
+    valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes)        # BUG - ERRORS OUT
     valid_data, valid_times = concat_valid_data_and_time(gvar_data, measrmnt.times, valid_ranges)
     if plot_results:
         ax_data.plot(gvalue(valid_times), gvalue(valid_data), 'g--', label="Valid data")

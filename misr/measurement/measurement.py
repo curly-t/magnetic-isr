@@ -1,7 +1,5 @@
 import time
 from os import path
-import sys
-from gvar import mean as gvalue
 
 from ..utils.measurement_utils import cmd_set_led_current, cmd_set_current, cmd_set_frequency,\
     cmd_start, send_to_server, setup_serial, make_measurement_run_folder,\
@@ -123,7 +121,8 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
                 send_to_server("start_tracking")
 
                 sleep_time = min(max_measurement_time, num_periods / freq)
-                user_exit = sleep_and_record_comments(sleep_time, comments_file, filename, cuttoff_time=0.01)
+                # user_exit = sleep_and_record_comments(sleep_time, comments_file, filename, cuttoff_time=0.01)
+                time.sleep(sleep_time)
 
                 send_to_server(f"stop_and_save_tracking {full_filepath}")
 
