@@ -72,8 +72,14 @@ def filter_filepaths_by_keywords(filepaths, keyword_list=None):
         return filtered_filepaths
 
 
+def sort_filepaths_by_frequency(filepaths):
+    pattern = re.compile(r"freq\d+.dat")
+    return sorted(filepaths, key=lambda fp: int(re.search(pattern, fp).group()[4:-4]))
+
+
 def import_filepaths(filepaths, **kwargs):
     measurements = []
+    filepaths = sort_filepaths_by_frequency(filepaths)
     for filepath in filepaths:
         measurements.append(Measurement(filepath, **kwargs))
     # TODO: GROUP INTO MEASUREMENT RUNS 

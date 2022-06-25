@@ -9,26 +9,15 @@ from os import walk
 from glob import glob
 
 
-# NOVA FUNKCIJA ZA IMPORT (ker importa sedaj .txt file z drugačno strukturo)
-# POTEM PA ŠE ENA FUNKCIJA V PLOTTING, ki ti naj RIŠE DIREKT AR in vse za izbrane EXPORTANE file, pa bo!!!
-def import_results(return_gvar=False):
+def import_results():
     """ Returns a dictionary of 2D numpy arrays (shown below), of all data selected in form of .txt files.
         {"label": np.array([[freq AR phase]1, [freq AR phase]2, ...])} """
     
     meas_folder = get_config()["meas"]
-    filepaths = askopenfilenames(initialdir=meas_folder, title="Select files to import")
+    filepaths = askopenfilenames(initialdir=meas_folder, title="Select one or more .txt files to import!")
     responses = {}
     for fp in filepaths:
-        meas_run = []
-        with open(fp, "r") as infile:
-            contents = [line.strip() for line in infile.readlines()]
-        for line in contents:
-            strf_values = line.split(" ")
-            if return_gvar:
-                meas_run.append([gvar(strf_values[0]), gvar(strf_values[1]), gvar(strf_values[2])])
-            else:
-                meas_run.append([gvar(strf_values[0]).mean, gvar(strf_values[1]).mean, gvar(strf_values[2]).mean])
-        responses[opath.split(fp)[1]] = np.array(meas_run)
+        responses[opath.split(fp)[1]] = np.loadtxt(fp)
     return responses
 
 
