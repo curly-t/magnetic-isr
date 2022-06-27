@@ -19,7 +19,7 @@ def plot_responses(responses):
 
     plot_params = {"elinewidth": 1, "capthick": 1, "capsize": 2, "markersize": 6, "linewidth": 0.5}
 
-    fig, axes = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+    fig, axes = plt.subplots(2, 1, figsize=(12, 10), sharex=True)
 
     prop_cycler = (cycler(marker=['o', 'v', '^', '<', '>', 's', 'p', 'D']) *
                    cycler(color=['r', 'g', 'b', 'y', 'k', 'c', 'm']))
