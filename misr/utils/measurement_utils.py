@@ -209,6 +209,28 @@ def disable_all_coils(s=None):
             cmd_stop(s)
 
 
+def make_measurement_config_file(folder_path, rod_id=None, tub_id=None, rod_orient=None,
+                                 x_pixel_count=None, x_pixel_size=None):
+    if rod_id is None:
+        rod_id = int(input("Please input the rod id: "))
+    if tub_id is None:
+        tub_id = int(input("Please input the tub id: "))
+    if rod_orient is None:
+        rod_orient = int(input("Please input rod orientation (+/-1): "))
+    if x_pixel_count is None:
+        x_pixel_count = get_hw_config()['x_pixels']
+    if x_pixel_size is None:
+        x_pixel_size = round(get_hw_config()['pixel_size'], 10)
+
+    # Add measurement config file
+    with open(path.join(folder_path, ".meas_config"), "w") as meas_conf_file:
+        print(f"X_PIXEL_COUNT='{x_pixel_count}'", file=meas_conf_file)
+        print(f"PIXEL_SIZE='{x_pixel_size}'", file=meas_conf_file)
+        print(f"ROD_ID='{rod_id}'", file=meas_conf_file)
+        print(f"TUB_ID='{tub_id}'", file=meas_conf_file)
+        print(f"ROD_ORIENT='{rod_orient}'", file=meas_conf_file)
+
+
 def make_measurement_run_folder():
     """ Creates a measurement run folder, based on current date, and a subfolder based on the specified name.
     Also adds the measurement configuration file to the folder, so the measurement class knows to find it. """
@@ -220,9 +242,6 @@ def make_measurement_run_folder():
         mkdir(date_folder_path)
 
     print("You are starting a new run!")
-    rod_id = int(input("Please input the rod id: "))
-    tub_id = int(input("Please input the tub id: "))
-
     print("How would you like to name the folder?")
     while True:
         folder_name = str(input())
@@ -234,12 +253,7 @@ def make_measurement_run_folder():
     full_folder_path = path.join(date_folder_path, folder_name)
     mkdir(full_folder_path)
 
-    # Add measurement config file
-    with open(path.join(full_folder_path, ".meas_config"), "w") as meas_conf_file:
-        print(f"X_PIXEL_COUNT='{get_hw_config()['x_pixels']}'", file=meas_conf_file)
-        print(f"PIXEL_SIZE='{get_hw_config()['pixel_size']:.10f}'", file=meas_conf_file)
-        print(f"ROD_ID='{rod_id}'", file=meas_conf_file)
-        print(f"TUB_ID='{tub_id}'", file=meas_conf_file)
+    make_measurement_config_file(full_folder_path)
 
     return full_folder_path
 

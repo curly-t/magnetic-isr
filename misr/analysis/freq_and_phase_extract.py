@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
 from scipy.interpolate import splrep, splev
-import scipy.signal.windows as ssw
 import warnings
 import math as m
 from gvar import gvar, sdev
@@ -52,23 +51,33 @@ def sinusoid_w_drift(t, A, freq, phase, const, speed):
     return A * np.sin(2*np.pi*freq * t + phase) + const + speed * t
 
 
-def fit_sinus_w_drift(gvar_fit_data, gvar_fit_time, central_freq, timeLen, phase_start=0.0):
+def fit_sinus_w_drift(gvar_fit_data, gvar_fit_time, central_freq, timeLen,
+                      phase_start=0.0, phase_end=2*np.pi, phase_init_guess=None):
     min_data = np.min(gvar_fit_data)
     max_data = np.max(gvar_fit_data)
 
-    low_bound_data = gvalue([0.5 * (max_data - min_data) / 2., central_freq * 0.8, phase_start,
+    low_bound_data = gvalue([0., central_freq * 0.9988, phase_start - 0.05 * np.pi,
                              min_data, -(max_data - min_data) / timeLen])
-    high_bound_data = gvalue([1.2 * (max_data - min_data) / 2., central_freq * 1.2, phase_start + 2 * np.pi,
+    high_bound_data = gvalue([2. * (max_data - min_data) / 2., central_freq * 1.0012, phase_end + 0.05 * np.pi,
                               max_data, (max_data - min_data) / timeLen])
 
+    if phase_init_guess is None:
+        phase_init_guess = (phase_start + phase_end)/2.
+
+    init_guess = (gvalue(max_data - min_data)/2., gvalue(central_freq), phase_init_guess,
+                  gvalue(max_data + min_data)/2, 0.)
+
     try:
-        data_coefs, data_cov = curve_fit(sinusoid_w_drift, gvalue(gvar_fit_time), gvalue(gvar_fit_data),
-                                             sigma=sdev(gvar_fit_data), absolute_sigma=True,
-                                             bounds=(low_bound_data, high_bound_data))
+        data_coefs, data_cov = curve_fit(sinusoid_w_drift, gvalue(gvar_fit_time), gvalue(gvar_fit_data), p0=init_guess,
+                                         sigma=sdev(gvar_fit_data), absolute_sigma=True,
+                                         bounds=(low_bound_data, high_bound_data))
     except RuntimeError:
         print("The least squares minimization fitting failed!")
 
-    return gvar(data_coefs, data_cov)
+    chisq = np.sum(np.square(((gvalue(gvar_fit_data) - sinusoid_w_drift(gvalue(gvar_fit_time), *data_coefs))
+                              /sdev(gvar_fit_data))))
+
+    return gvar(data_coefs, data_cov), chisq
 
 
 def get_drift_on_valid_ranges(gvar_data, measrmnt, valid_ranges, data_coefs):
@@ -158,8 +167,8 @@ def subtract_drift_from_data_on_valid_ranges(drift, data, time, valid_ranges):
 
 
 def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_limit,
-                            smoothing_factor=10, bandreject_width_factor=0.5, plot_results=False, phase_start=0.0,
-                            bandfilter_drift=True):
+                            smoothing_factor=10, bandreject_width_factor=0.5, plot_results=False,
+                            phase_start=0.0, phase_end=2*np.pi, bandfilter_drift=True, num_final_fits=20):
     if plot_results:
         fig, (ax_data, ax_drift) = plt.subplots(1, 2)
         ax_data.plot(gvalue(measrmnt.times), gvalue(gvar_data), 'y-', label="Data")
@@ -170,8 +179,9 @@ def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_
     if plot_results:
         ax_data.plot(gvalue(valid_times), gvalue(valid_data), 'g--', label="Valid data")
         ax_data.legend()
-    data_coefs = fit_sinus_w_drift(valid_data, valid_times, expected_freq, measrmnt.timeLength,
-                                   phase_start)
+    # Določi frekvenco in const odmik + speed, zato točna faza še ni tulk pomembna, frekvenca ej itaka ful blizu Ifreq
+    # domik pa je lahko določen tudi brez točne faze!
+    data_coefs, _ = fit_sinus_w_drift(valid_data, valid_times, expected_freq, measrmnt.timeLength, phase_start, phase_end)
     valid_drift, new_valid_times, new_valid_ranges = get_drift_on_valid_ranges(gvar_data, measrmnt, valid_ranges, data_coefs)
     if plot_results:
         ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b-", label="Valid drift")
@@ -195,8 +205,18 @@ def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_
                                                                                            gvar_data,
                                                                                            measrmnt.times,
                                                                                            new_valid_ranges)
-    data_coefs = fit_sinus_w_drift(valid_driftless_data, valid_driftless_times, expected_freq, measrmnt.timeLength,
-                                   phase_start)
+    # Multiple fittings - to ensure best fit, use lowest chisq fit!
+    finalfit_results = np.ones(num_final_fits) * np.inf
+    all_data_coefs = []
+    initial_phase_guesses = np.linspace(phase_start, phase_end, num=num_final_fits)
+    for i, initial_phi in enumerate(initial_phase_guesses):
+        data_coefs, chisq = fit_sinus_w_drift(valid_driftless_data, valid_driftless_times, expected_freq,
+                                              measrmnt.timeLength, phase_start, phase_end, phase_init_guess=initial_phi)
+        finalfit_results[i] = chisq
+        all_data_coefs.append(data_coefs)
+
+    data_coefs = all_data_coefs[np.argmin(finalfit_results)]
+
     if plot_results:
         plt.plot(gvalue(valid_driftless_times), gvalue(valid_driftless_data), 'b-', label="Driftless data")
         plt.plot(gvalue(valid_driftless_times), gvalue(sinusoid_w_drift(valid_driftless_times, *data_coefs)), 'k-', label="Fit")
@@ -214,7 +234,22 @@ def check_for_freq_discrepancy(bright_coefs, pos_coefs, func_params):
         warnings.warn(f"Rel. freq. err: Brightness freq: {bright_coefs[1]} Position freq: {pos_coefs[1]}")
 
 
-def freq_phase_ampl(measrmnt, fitting_params={}, fpa_params={}):
+def determine_phase_start_end(bright_phase, rod_orientation, fitting_params):
+    if ("phase_start" in fitting_params) and ("phase_end" in fitting_params):
+        ps, pe = fitting_params["phase_start"], fitting_params["phase_end"]
+        exclude_phases = ["phase_start", "phase_end"]
+        new_fit_params = {k: v for (k, v) in fitting_params.items() if k not in exclude_phases}
+    else:
+        # Phase sign is different for different rod orientations mu +- 1
+        new_fit_params = fitting_params
+        if rod_orientation == 1:
+            ps, pe = gvalue(bright_phase), gvalue(bright_phase + np.pi)   # mu = +1 (apparent zaostajanje)
+        else:
+            ps, pe = gvalue(bright_phase) - np.pi, gvalue(bright_phase)   # mu = -1 (apparent PREHITEVANJE)
+    return ps, pe, new_fit_params
+
+
+def freq_phase_ampl(measrmnt, fpa_params={}, fitting_params={}):
     """ This function calculates the frequency of the vibration of the rod, the relative phase between
         the brightness modulation (current) and the response of the rod (position), and the amplitude of the rod response,
         from the results of rod tracking, and brightness logging.
@@ -247,23 +282,29 @@ def freq_phase_ampl(measrmnt, fitting_params={}, fpa_params={}):
         """
 
     func_params = {"plot_bright_results": False, "plot_track_results": False,
-                   "freq_err": 0.1, "rod_led_phase_correct": True}
+                   "freq_err": 0.1}
     func_params.update(fpa_params)
-
+    print("-"*20)
+    print(f"Current freq {measrmnt.Ifreq}")
     bright_coefs = perform_fitting_on_data(measrmnt.brights, measrmnt, measrmnt.Ifreq, 0, 255,
                                            plot_results=func_params["plot_bright_results"], **fitting_params)
+    print(f"Brightness freq, phase {bright_coefs[1]} {bright_coefs[2]}")
 
+    ps, pe, new_fit_params = determine_phase_start_end(bright_coefs[2], measrmnt.rod_orient, fitting_params)
     pos_coefs = perform_fitting_on_data(measrmnt.positions, measrmnt, bright_coefs[1], 1, measrmnt.x_pixels - 1,
                                         plot_results=func_params["plot_track_results"],
-                                        phase_start=bright_coefs[2] - 2*np.pi, **fitting_params)
+                                        phase_start=ps, phase_end=pe,
+                                        **new_fit_params)
+    print(f"Rod freq, phase {pos_coefs[1]} {pos_coefs[2]}")
+    # ADD AN ADDITIONAL PHASE ERROR --> FREQUENCY AND PHASE OF THE BRIGHTNESS IMPACT THE PHASE GREATLY!!!!!!!!
 
     check_for_freq_discrepancy(bright_coefs, pos_coefs, func_params)
 
-    result_dict = {"rod_freq": pos_coefs[1], "rod_ampl": pos_coefs[0], "rod_phase": pos_coefs[2] - bright_coefs[2]}
-
-    if func_params["rod_led_phase_correct"]:
-        # BECAUSE ROD AND LED PHASES ARE RECORDED SUCH THAT THERE APPEARS AN ADDITIONAL 180 PHASE DIFFERENCE
-        result_dict["rod_phase"] += np.pi
+    if measrmnt.rod_orient == 1:
+        rod_phase = pos_coefs[2] - bright_coefs[2] - np.pi
+    else:
+        rod_phase = pos_coefs[2] - bright_coefs[2]
+    result_dict = {"rod_freq": pos_coefs[1], "rod_ampl": pos_coefs[0], "rod_phase": rod_phase}
 
     mean_rod_position = np.sum(measrmnt.positions)/len(measrmnt.positions)
 

@@ -7,7 +7,7 @@ from ..utils.get_rod_and_tub_info import guess_rod_and_tub
 
 
 class Measurement:
-    def __init__(self, filepath, filter_duplicates=True, max_num_points=300):
+    def __init__(self, filepath, filter_duplicates=True, max_num_points=300, guess_rod_orient=True):
         # Information about the filepath, filename and filedir
         self.filepath = filepath
         self.filename = os.path.split(filepath)[1]
@@ -21,7 +21,7 @@ class Measurement:
         # FIND / MEASURE ERROR VALUES!!! IT IS OF EXTREME IMPORTANCE TO THE ERROR ESTIMATION!!!
         # NATAN ANSWER --> cca 0.8mA of error combined!   -- tu dal pol napake Ioffs in pol Iampl
 
-        self.import_measurement_config()
+        self.import_measurement_config(guess_rod_orient)
 
         trackData = np.loadtxt(filepath)
         if filter_duplicates:
@@ -44,7 +44,7 @@ class Measurement:
     def date_of_last_mod(self):
         return datetime.fromtimestamp(self.timestamp_of_last_mod).strftime('%Y-%m-%d %H:%M:%S')
 
-    def import_measurement_config(self):
+    def import_measurement_config(self, guess_rod_orient):
         full_folder_path = os.path.split(self.filepath)[0]
         meas_config_path = os.path.join(full_folder_path, ".meas_config")
         if os.path.isfile(meas_config_path):
@@ -54,13 +54,38 @@ class Measurement:
                 self.pixel_size = float(re.search("PIXEL_SIZE='.*'", file_contents)[0][12:-1])
                 self.rod_id = int(re.search("ROD_ID='.*'", file_contents)[0][8:-1])
                 self.tub_id = int(re.search("TUB_ID='.*'", file_contents)[0][8:-1])
+                self.rod_orient = re.search("ROD_ORIENT='.*'", file_contents)
+                # Some measurements will have no information about rod orientation
+            if self.rod_orient is not None:
+                self.rod_orient = int(self.rod_orient[0][12:-1])
+            else:
+                if not guess_rod_orient:
+                    self.rod_orient = 1
+                else:
+                    # THIS IMPORT MUST BE HERE TO AVOID CIRCULAR IMPORTS
+                    from ..utils.guess_rod_orientation import guess_rod_orientation
+                    from ..utils.measurement_utils import make_measurement_config_file
+                    print("ROD ORIENTATION FOR THIS FILE NOT KNOWN!")
+                    print("Guessing rod orientation and making new meas_config file!")
+                    self.rod_orient = guess_rod_orientation(full_folder_path)
+                    make_measurement_config_file(full_folder_path, self.rod_id, self.tub_id,
+                                                 self.rod_orient, self.x_pixels, self.pixel_size)
+
         else:
+            # THIS IMPORT MUST BE HERE TO AVOID CIRCULAR IMPORTS
+            from ..utils.guess_rod_orientation import guess_rod_orientation
             print("IMPORTING MEASUREMENT WITHOUT MEASUREMENT CONFIG FILE!")
             print("DEFAULT MODE 600 x 960 pixels ASSUMED!!!!!!")
             self.x_pixels = 960
             self.pixel_size = 0.00000296      # DEFAULT VALUE FOR 600x960
-            self.rod_id, self.tub_id = guess_rod_and_tub([self.dirname])
-            # If found nothing - returned rod and tub ids will be None
+            self.rod_id, self.tub_id = guess_rod_and_tub([self.dirname])    # If nothing --> rod_id, tub_id = None, None
+            if not guess_rod_orient:
+                self.rod_orient = 1
+            else:
+                print("Guessing the rod orientation!")
+                self.rod_orient = guess_rod_orientation(full_folder_path)
+                # Ne moreš nardit novega configa ker ne veš kakšna sta bla rod in tub!
+
 
     def filter_duplicate_data(self, trackdata):
         non_duplicates = np.where(trackdata[:-1, 1] != trackdata[1:, 1])[0]
