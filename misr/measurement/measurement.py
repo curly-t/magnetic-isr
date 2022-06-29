@@ -1,10 +1,12 @@
+import numpy as np
 import time
 from os import path
 
 from ..utils.measurement_utils import cmd_set_led_current, cmd_set_current, cmd_set_frequency,\
     cmd_start, send_to_server, setup_serial, make_measurement_run_folder,\
     check_freqs, get_hw_config, set_framerate, ask_do_you_want_to_continue,\
-    calc_new_dynamic_ampl, print_prerun_checklist, sleep_and_record_comments
+    calc_new_dynamic_ampl, print_prerun_checklist, sleep_and_record_comments, cmd_set_const_current_in_coils,\
+    wait_till_rod_is_stationary
 
 
 def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.03, wait_periods=4):
@@ -39,7 +41,8 @@ def run_low_freq_ampl_cal(offset, ampl, freq=0.05, led_offset=0.09, led_ampl=0.0
 
 def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5, post_tracking_wait=2,
         max_measurement_time=420, num_periods=15, min_num_periods=4, pixel_safety_margin=100, dynamic_amplitude=True,
-        datapoints_per_period=20, dynamic_framerate=True, min_framerate=None):
+        datapoints_per_period=20, dynamic_framerate=True, min_framerate=None,
+        add_zero_freq_meas=True, max_still_slope=0.2):
 
     """ Runs the measurement run for all requested frequencies, at starting amplitude and offset settings.
         The measurement run consists of:
@@ -101,12 +104,41 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
     full_folder_path = make_measurement_run_folder()
 
     with setup_serial() as s:
-
+        print("Waiting for rod to be stationary")
         time.sleep(0.1)
         cmd_set_led_current(s, led_offset, led_ampl)
-        cmd_set_current(s, offset, ampl)
+        cmd_set_current(s, offset, 0)
+        cmd_start(s)
+        set_framerate(min_framerate)
+        time.sleep(0.1)
+        wait_till_rod_is_stationary(max_still_slope, full_folder_path)
 
         with open(path.join(full_folder_path, "comments.txt"), "w") as comments_file:
+            if add_zero_freq_meas:
+                # Meritev tja in nazaj - apoksimacija ničelne frekvence
+                filename = f"offs{int(round(1000*offset))}_ampl{int(round(1000*ampl))}_freq0.dat"
+                full_filepath = path.join(full_folder_path, filename)
+
+                cmd_set_const_current_in_coils(s, offset+ampl, offset-ampl)
+                cmd_start(s)
+                time.sleep(0.1)
+                pos_1 = wait_till_rod_is_stationary(max_still_slope, full_folder_path)
+
+                cmd_set_const_current_in_coils(s, offset-ampl, offset+ampl)
+                cmd_start(s)
+                time.sleep(0.1)
+                pos_2 = wait_till_rod_is_stationary(max_still_slope, full_folder_path)
+
+                cmd_set_current(s, offset, 0)
+                cmd_start(s)
+                time.sleep(0.1)
+                wait_till_rod_is_stationary(max_still_slope, full_folder_path)  # Končna umiritev pred nadaljevanjem
+
+                with open(full_filepath, "w") as zerofile:
+                    print(f"AMPL='{np.abs(pos_2 - pos_1) / 2}'", file=zerofile)
+                    print(f"MEAN='{np.abs(pos_2 + pos_1) / 2}'", file=zerofile)
+
+            cmd_set_current(s, offset, ampl)
             for freq in freqs:
                 filename = f"offs{int(round(1000*offset))}_ampl{int(round(1000*ampl))}_freq{int(round(1000*freq))}.dat"
                 full_filepath = path.join(full_folder_path, filename)
@@ -122,6 +154,7 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
 
                 sleep_time = min(max_measurement_time, num_periods / freq)
                 # user_exit = sleep_and_record_comments(sleep_time, comments_file, filename, cuttoff_time=0.01)
+                user_exit = False
                 time.sleep(sleep_time)
 
                 send_to_server(f"stop_and_save_tracking {full_filepath}")
@@ -161,7 +194,7 @@ def time_run(freqs, pre_tracking_wait, post_tracking_wait, max_measurement_time,
         The function returns the total approximated time of the measurement run in seconds.
     """
 
-    timer = 0
+    timer = 41      # Na začetku že deset sekund čakanja, in nato še 3x 10 + change
 
     for freq in freqs:
         timer += pre_tracking_wait

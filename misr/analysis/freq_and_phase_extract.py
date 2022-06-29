@@ -286,27 +286,35 @@ def freq_phase_ampl(measrmnt, fpa_params={}, fitting_params={}):
     func_params.update(fpa_params)
     print("-"*20)
     print(f"Current freq {measrmnt.Ifreq}")
-    bright_coefs = perform_fitting_on_data(measrmnt.brights, measrmnt, measrmnt.Ifreq, 0, 255,
-                                           plot_results=func_params["plot_bright_results"], **fitting_params)
-    print(f"Brightness freq, phase {bright_coefs[1]} {bright_coefs[2]}")
-
-    ps, pe, new_fit_params = determine_phase_start_end(bright_coefs[2], measrmnt.rod_orient, fitting_params)
-    pos_coefs = perform_fitting_on_data(measrmnt.positions, measrmnt, bright_coefs[1], 1, measrmnt.x_pixels - 1,
-                                        plot_results=func_params["plot_track_results"],
-                                        phase_start=ps, phase_end=pe,
-                                        **new_fit_params)
-    print(f"Rod freq, phase {pos_coefs[1]} {pos_coefs[2]}")
-    # ADD AN ADDITIONAL PHASE ERROR --> FREQUENCY AND PHASE OF THE BRIGHTNESS IMPACT THE PHASE GREATLY!!!!!!!!
-
-    check_for_freq_discrepancy(bright_coefs, pos_coefs, func_params)
-
-    if measrmnt.rod_orient == 1:
-        rod_phase = pos_coefs[2] - bright_coefs[2] - np.pi
+    if measrmnt.Ifreq == 0:
+        rod_phase = 0.
+        rod_freq = 0.
+        rod_ampl = measrmnt.zero_ampl
+        mean_rod_position = measrmnt.zero_mean
     else:
-        rod_phase = pos_coefs[2] - bright_coefs[2]
-    result_dict = {"rod_freq": pos_coefs[1], "rod_ampl": pos_coefs[0], "rod_phase": rod_phase}
+        bright_coefs = perform_fitting_on_data(measrmnt.brights, measrmnt, measrmnt.Ifreq, 0, 255,
+                                               plot_results=func_params["plot_bright_results"], **fitting_params)
+        print(f"Brightness freq, phase {bright_coefs[1]} {bright_coefs[2]}")
 
-    mean_rod_position = np.sum(measrmnt.positions)/len(measrmnt.positions)
+        ps, pe, new_fit_params = determine_phase_start_end(bright_coefs[2], measrmnt.rod_orient, fitting_params)
+        pos_coefs = perform_fitting_on_data(measrmnt.positions, measrmnt, bright_coefs[1], 1, measrmnt.x_pixels - 1,
+                                            plot_results=func_params["plot_track_results"],
+                                            phase_start=ps, phase_end=pe,
+                                            **new_fit_params)
+        print(f"Rod freq, phase {pos_coefs[1]} {pos_coefs[2]}")
+        # ADD AN ADDITIONAL PHASE ERROR --> FREQUENCY AND PHASE OF THE BRIGHTNESS IMPACT THE PHASE GREATLY!!!!!!!!
+
+        check_for_freq_discrepancy(bright_coefs, pos_coefs, func_params)
+        mean_rod_position = np.sum(measrmnt.positions) / len(measrmnt.positions)
+
+        if measrmnt.rod_orient == 1:
+            rod_phase = pos_coefs[2] - bright_coefs[2] - np.pi
+        else:
+            rod_phase = pos_coefs[2] - bright_coefs[2]
+        rod_freq = pos_coefs[1]
+        rod_ampl = pos_coefs[0]
+
+    result_dict = {"rod_freq": rod_freq, "rod_ampl": rod_ampl, "rod_phase": rod_phase}
 
     return SingleResult(result_dict, measrmnt, mean_rod_position)
 

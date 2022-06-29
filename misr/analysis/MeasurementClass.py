@@ -23,23 +23,29 @@ class Measurement:
 
         self.import_measurement_config(guess_rod_orient)
 
-        trackData = np.loadtxt(filepath)
-        if filter_duplicates:
-            non_duplicate_idxs = self.filter_duplicate_data(trackData)
-            trackData = trackData[non_duplicate_idxs]
+        if self.Ifreq == 0:
+            with open(filepath, "r") as f:
+                self.zero_ampl = float(f.readline().strip()[6:-1])  # Prvi line AMPL='142.4'
+                self.zero_mean = float(f.readline().strip()[6:-1])  # Drug line MEAN='501.31233'
 
-        if max_num_points is not None:
-            selected_points = self.dilute_number_of_points(len(trackData), max_num_points)
-            trackData = trackData[selected_points]
+        else:
+            trackData = np.loadtxt(filepath)
+            if filter_duplicates:
+                non_duplicate_idxs = self.filter_duplicate_data(trackData)
+                trackData = trackData[non_duplicate_idxs]
 
-        # The trackData array is comprised of 4 columns:
-        # frameIdx, frameTime, rodEdgePos, brightness
-        self.timeLength = trackData[-1, 1] - trackData[0, 1]
-        self.numFrames = len(trackData)
-        self.frameIdxs = trackData[:, 0]                                            # There can be no error in index
-        self.times = gvar(trackData[:, 1], np.ones(self.numFrames)*0.0005)          # Assuming 0.5 ms error in time
-        self.positions = gvar(trackData[:, 2], np.ones(self.numFrames)*0.5)         # Assuming half pixel of resolution
-        self.brights = gvar(trackData[:, 3], np.ones(self.numFrames)/np.sqrt(100))  # Assuming calc by 10x10 average
+            if max_num_points is not None:
+                selected_points = self.dilute_number_of_points(len(trackData), max_num_points)
+                trackData = trackData[selected_points]
+
+            # The trackData array is comprised of 4 columns:
+            # frameIdx, frameTime, rodEdgePos, brightness
+            self.timeLength = trackData[-1, 1] - trackData[0, 1]
+            self.numFrames = len(trackData)
+            self.frameIdxs = trackData[:, 0]                                            # There can be no error in index
+            self.times = gvar(trackData[:, 1], np.ones(self.numFrames)*0.0005)          # Assuming 0.5 ms error in time
+            self.positions = gvar(trackData[:, 2], np.ones(self.numFrames)*0.5)         # Assuming half pixel of resolution
+            self.brights = gvar(trackData[:, 3], np.ones(self.numFrames)/np.sqrt(100))  # Assuming calc by 10x10 average
 
     def date_of_last_mod(self):
         return datetime.fromtimestamp(self.timestamp_of_last_mod).strftime('%Y-%m-%d %H:%M:%S')

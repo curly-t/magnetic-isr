@@ -1,8 +1,9 @@
+import numpy as np
 import time, socket, serial, re, sys
 from select import select
 from warnings import warn
 from datetime import datetime
-from os import path, mkdir
+from os import path, mkdir, remove
 from .config import get_config
 from functools import cache
 from ..analysis.freq_and_phase_extract import freq_phase_ampl
@@ -126,6 +127,12 @@ def cmd_set_current_on_coil(s, channel, offsetA, amplitudeA):
         send_serial_command(s, b'AMPCH2=%.3f\r\n' % ((chmax - chmin) / 2.0))
     else:
         return None
+
+
+def cmd_set_const_current_in_coils(s, curr1, curr2):
+    cmd_set_frequency(s, 0.001)
+    cmd_set_current_on_coil(s, 1, curr1, 0)
+    cmd_set_current_on_coil(s, 2, curr2, 0)
 
 
 def cmd_set_led_current(s, offsetA, amplitudeA):
@@ -293,6 +300,26 @@ def check_freqs(freqs, max_time, min_num_periods, min_datapoints_per_period, max
 
     if any_warnings:
         ask_do_you_want_to_continue()
+
+
+def wait_till_rod_is_stationary(max_still_slope, folderpath):
+    filepath = path.join(folderpath, "temp.dat")
+    while True:
+        time.sleep(0.1)
+        send_to_server("start_tracking")
+        time.sleep(2/max_still_slope)       # Da vidi lahko spremembo 2 pixla
+        send_to_server(f"stop_and_save_tracking {filepath}")
+        time.sleep(0.1)
+        data = np.loadtxt(filepath)
+        times = data[:, 1]
+        pos = data[:, 2]
+        coefs, cov = np.polyfit(times, pos, deg=1, cov='unscaled')
+        print("SAMO ZA DEBUGIRAT:")
+        print(f"Koeficient premice pri umirjanju {np.abs(coefs[0] / np.sqrt(cov[0, 0]))} <? {max_still_slope}")
+        if np.abs(coefs[0] / np.sqrt(cov[0, 0])) < max_still_slope:
+            remove(filepath)
+            return coefs[1]
+
 
 
 def ask_do_you_want_to_continue(warning=None, s=None):
