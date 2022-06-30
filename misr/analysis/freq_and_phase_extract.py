@@ -287,10 +287,10 @@ def freq_phase_ampl(measrmnt, fpa_params={}, fitting_params={}):
     print("-"*20)
     print(f"Current freq {measrmnt.Ifreq}")
     if measrmnt.Ifreq == 0:
-        rod_phase = 0.
-        rod_freq = 0.
-        rod_ampl = measrmnt.zero_ampl
-        mean_rod_position = measrmnt.zero_mean
+        rod_phase = gvar(5e-3, 5e-3)
+        rod_freq = gvar(1e-4, 1e-4)
+        rod_ampl = gvar(measrmnt.zero_ampl, 0.5)     # Pol pixla
+        mean_rod_position = gvar(measrmnt.zero_mean, 0.5)   # Tudi pol pixla
     else:
         bright_coefs = perform_fitting_on_data(measrmnt.brights, measrmnt, measrmnt.Ifreq, 0, 255,
                                                plot_results=func_params["plot_bright_results"], **fitting_params)
