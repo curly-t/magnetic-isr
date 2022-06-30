@@ -137,6 +137,7 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
                 with open(full_filepath, "w") as zerofile:
                     print(f"AMPL='{np.abs(pos_2 - pos_1) / 2}'", file=zerofile)
                     print(f"MEAN='{np.abs(pos_2 + pos_1) / 2}'", file=zerofile)
+                    ampl = calc_new_dynamic_ampl(offset, ampl, full_filepath, pixel_safety_margin, hw_conf)
 
             cmd_set_current(s, offset, ampl)
             for freq in freqs:
