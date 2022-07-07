@@ -21,10 +21,9 @@ def import_results():
     return responses
 
 
-def save_response_to_txt(response, filepath, mode="a"):
+def save_responses_to_txt(responses, filepath, mode="a"):
     with open(filepath, mode) as f:
-        print("# freq AR phase freq_err AR_err phase_err", file=f)
-        for point_res in response:
+        for point_res in responses:
             print(point_res.rod_freq.mean, point_res.AR.mean, point_res.rod_phase.mean, point_res.rod_freq.sdev, point_res.AR.sdev, point_res.rod_phase.sdev, file=f)
 
 
@@ -54,4 +53,4 @@ def reanalyze_responses():
         for meas in measurements:
             responses.append(freq_phase_ampl(meas))
         responses = sorted(responses, key=lambda resp: resp.rod_freq.mean)  # Sortiranje po frekvencah
-        save_response_to_txt(responses, full_export_filename)
+        save_responses_to_txt(responses, full_export_filename)

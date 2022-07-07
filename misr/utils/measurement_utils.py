@@ -9,7 +9,7 @@ from functools import cache
 from ..analysis.freq_and_phase_extract import freq_phase_ampl
 from ..analysis.import_trackdata import import_filepaths
 from gvar import mean as gvalue
-from ..utils.save_and_get_results import save_response_to_txt
+from ..utils.save_and_get_results import save_responses_to_txt
 
 
 @cache
@@ -307,7 +307,7 @@ def wait_till_rod_is_stationary(max_still_slope, folderpath):
     while True:
         time.sleep(0.1)
         send_to_server("start_tracking")
-        time.sleep(2/max_still_slope)       # Da vidi lahko spremembo 2 pixla
+        time.sleep(10)       # Da vidi lahko spremembo 2 pixla
         send_to_server(f"stop_and_save_tracking {filepath}")
         time.sleep(0.1)
         data = np.loadtxt(filepath)
@@ -342,7 +342,7 @@ def calc_new_dynamic_ampl(offset, ampl, full_filepath, pixel_safety_margin, hw_c
     experiment_foldername = path.split(folder_name)[1]
     date_foldername = path.split(path.split(folder_name)[0])[1]
     full_export_filename = path.join(folder_name, f"{date_foldername}_{experiment_foldername}.txt")
-    save_response_to_txt(res, full_export_filename)    # Zraven še shranimo!
+    save_responses_to_txt([res, ], full_export_filename)  # Zraven še shranimo!
     # Izračuna faktorje in vse te stvari
     current_factor = (hw_conf["x_pixels"] - pixel_safety_margin - res.rod_mean) / gvalue(res.rod_ampl)
     ampl = max(0.001, min(hw_conf["max_current"] - offset, ampl * current_factor))
