@@ -130,7 +130,7 @@ def cmd_set_current_on_coil(s, channel, offsetA, amplitudeA):
 
 
 def cmd_set_const_current_in_coils(s, curr1, curr2):
-    cmd_set_frequency(s, 0.001)
+    cmd_set_frequency(s, 0.01)
     cmd_set_current_on_coil(s, 1, curr1, 0)
     cmd_set_current_on_coil(s, 2, curr2, 0)
 

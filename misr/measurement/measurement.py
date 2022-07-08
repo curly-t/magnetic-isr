@@ -108,6 +108,7 @@ def run(offset, ampl, freqs, led_offset=0.09, led_ampl=0.03, pre_tracking_wait=5
         time.sleep(0.1)
         cmd_set_led_current(s, led_offset, led_ampl)
         cmd_set_current(s, offset, 0)
+        cmd_set_frequency(s, 0.01)
         cmd_start(s)
         set_framerate(min_framerate)
         time.sleep(0.1)
