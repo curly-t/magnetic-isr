@@ -69,6 +69,33 @@ def flowfield_FDM(N, max_p, Bo, Re):
 
     M, c = construct_FDM_system(N, ps, hp, htheta, Re, Bo)
 
+    # im = plt.imshow(np.log(np.abs(np.real(M))) * np.sign(np.real(M)))
+    # plt.title(r"$sign(\mathcal{Re} \ [M]) \cdot \log(\mathcal{Re} \ [M])$")
+    # plt.xticks([])
+    # plt.yticks([])
+    # plt.colorbar(im)
+    # plt.tight_layout()
+    # plt.savefig("real-M.pdf")
+    # plt.show()
+    #
+    # im = plt.imshow(np.log(np.abs(np.imag(M))) * np.sign(np.imag(M)))
+    # plt.title(r"$sign(\mathcal{Re} \ [M]) \cdot \log(\mathcal{Im}[M])$")
+    # plt.xticks([])
+    # plt.yticks([])
+    # plt.colorbar(im)
+    # plt.tight_layout()
+    # plt.savefig("imag-M.pdf")
+    # plt.show()
+    #
+    # im = plt.imshow(np.log(np.abs(M)))
+    # plt.title(r"$\log(|M|)$")
+    # plt.xticks([])
+    # plt.yticks([])
+    # plt.colorbar(im)
+    # plt.tight_layout()
+    # plt.savefig("abs-M.pdf")
+    # plt.show()
+
     # >>> scipy.sparse.linalg.solve FAILS!!!
     # When searching for an answer, discovered this:
     # BUG in numpy OR more probably in MKL with conda!

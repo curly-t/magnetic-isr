@@ -13,8 +13,9 @@ def visualize_flowfield_polar(flowfield, ps, thetas, name=""):
     z = np.real(g)
 
     plt.subplot(projection="polar", frameon=False)
-    plt.pcolormesh(th, r, z, shading="gouraud")
+    slika = plt.pcolormesh(th, r, z, shading="gouraud")
     plt.pcolormesh(th - np.pi / 2, r, z[::-1], shading="gouraud")  # ZRCALNA SLIKA
+    plt.colorbar(slika)
     plt.tick_params(labelcolor="white", width=0)
     plt.tight_layout()
     if name != "":
@@ -30,8 +31,9 @@ def visualize_flowfield_polar(flowfield, ps, thetas, name=""):
     z = np.imag(g)
 
     plt.subplot(projection="polar", frameon=False)
-    plt.pcolormesh(th, r, z, shading="gouraud")
+    slika = plt.pcolormesh(th, r, z, shading="gouraud")
     plt.pcolormesh(th - np.pi / 2, r, z[::-1], shading="gouraud")  # ZRCALNA SLIKA
+    plt.colorbar(slika)
     plt.tick_params(labelcolor="white", width=0)
     plt.tight_layout()
     if name != "":
