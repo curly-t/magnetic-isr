@@ -9,12 +9,13 @@ from os import walk
 from glob import glob
 
 
-def import_results():
+def import_results(filepaths=None):
     """ Returns a dictionary of 2D numpy arrays (shown below), of all data selected in form of .txt files.
         {"label": np.array([[freq AR phase]1, [freq AR phase]2, ...])} """
-    
-    meas_folder = get_config()["meas"]
-    filepaths = askopenfilenames(initialdir=meas_folder, title="Select one or more .txt files to import!")
+
+    if filepaths is None:
+        meas_folder = get_config()["meas"]
+        filepaths = askopenfilenames(initialdir=meas_folder, title="Select one or more .txt files to import!")
     responses = {}
     for fp in filepaths:
         responses[opath.split(fp)[1]] = np.loadtxt(fp)
