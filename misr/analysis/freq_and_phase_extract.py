@@ -171,23 +171,60 @@ def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_
                             phase_start=0.0, phase_end=2*np.pi, bandfilter_drift=True, num_final_fits=20):
     if plot_results:
         fig, (ax_data, ax_drift) = plt.subplots(1, 2)
-        ax_data.plot(gvalue(measrmnt.times), gvalue(gvar_data), 'y-', label="Data")
-        plt.suptitle(f"freq={gvalue(measrmnt.Ifreq):.3f}")
+        ax_data.plot(gvalue(measrmnt.times), gvalue(gvar_data), 'b-', label="Data", linewidth=3)
+        # plt.plot(gvalue(measrmnt.times), gvalue(gvar_data), 'b-', label="Data", linewidth=3)
+        # plt.suptitle(f"freq={gvalue(measrmnt.Ifreq):.3f}")
+        # plt.legend()
+        # plt.xlabel(r"t    $[s]$", fontsize=14)
+        # plt.ylabel(r"x    $[pix]$", fontsize=14)
+        # plt.tight_layout()
+        # if gvalue(measrmnt.Ifreq) == 0.066:
+        #     plt.savefig("data-only.pdf")
+        # plt.clf()
     valid_indexes = identify_noninterupted_valid_idxs(gvar_data, low_limit, high_limit)
     valid_ranges = convert_valid_idxs_to_valid_ranges(valid_indexes)        # BUG - ERRORS OUT
     valid_data, valid_times = concat_valid_data_and_time(gvar_data, measrmnt.times, valid_ranges)
     if plot_results:
-        ax_data.plot(gvalue(valid_times), gvalue(valid_data), 'g--', label="Valid data")
+        ax_data.plot(gvalue(valid_times), gvalue(valid_data), 'y-', label="Valid data", linewidth=1)
         ax_data.legend()
+        # invalid_mask = np.ones(len(gvar_data))
+        # invalid_mask[valid_indexes] = 0
+        # masked_data = np.where(invalid_mask, None, gvalue(gvar_data))
+        # masked_time = np.where(invalid_mask, None, gvalue(measrmnt.times))
+        # plt.plot(masked_time, masked_data, 'y-', label="Valid data", linewidth=1)
+        # plt.legend()
+        # plt.xlabel(r"t    $[s]$", fontsize=14)
+        # plt.ylabel(r"x    $[pix]$", fontsize=14)
+        # plt.tight_layout()
+        # if gvalue(measrmnt.Ifreq) == 0.066:
+        #     plt.savefig("data-valid.pdf")
+        # plt.clf()
+
     # Določi frekvenco in const odmik + speed, zato točna faza še ni tulk pomembna, frekvenca ej itaka ful blizu Ifreq
     # domik pa je lahko določen tudi brez točne faze!
     data_coefs, _ = fit_sinus_w_drift(valid_data, valid_times, expected_freq, measrmnt.timeLength, phase_start, phase_end)
     valid_drift, new_valid_times, new_valid_ranges = get_drift_on_valid_ranges(gvar_data, measrmnt, valid_ranges, data_coefs)
     if plot_results:
-        ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b-", label="Valid drift")
+        ax_drift.plot(gvalue(new_valid_times), gvalue(valid_drift), "b|-", label="Valid drift", linewidth=3)
+        # plt.plot(gvalue(new_valid_times), gvalue(valid_drift), "b|-", label="Valid drift", linewidth=3)
+        # plt.legend()
+        # plt.xlabel(r"t    $[s]$", fontsize=14)
+        # plt.ylabel(r"x    $[pix]$", fontsize=14)
+        # plt.tight_layout()
+        # if gvalue(measrmnt.Ifreq) == 0.066:
+        #     plt.savefig("drift-valid.pdf")
+        # plt.clf()
     smoothed_drift = smooth_drift(valid_drift, new_valid_times, measrmnt.times, smoothing_factor)
     if plot_results:
-        ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'y--', label="Smooth extended drift")
+        ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'k-', label="Smooth extended drift", linewidth=3)
+        # plt.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), 'k-', label="Smooth extended drift", linewidth=3)
+        # plt.legend()
+        # plt.xlabel(r"t    $[s]$", fontsize=14)
+        # plt.ylabel(r"x    $[pix]$", fontsize=14)
+        # plt.tight_layout()
+        # if gvalue(measrmnt.Ifreq) == 0.066:
+        #     plt.savefig("drift-smooth-valid.pdf")
+        # plt.clf()
         if not bandfilter_drift:
             ax_drift.legend()
             plt.show()
@@ -197,9 +234,18 @@ def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_
         smoothed_drift = remove_freqs_near_expected_freq(smoothed_drift, measrmnt.times, bandreject_width,
                                                                 bandreject_center)
         if plot_results:
-            ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), "k--", label="Final drift")
+            ax_drift.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), "y-", label="Final drift")
             ax_drift.legend()
             plt.show()
+            # plt.plot(gvalue(measrmnt.times), gvalue(smoothed_drift), "y-", label="Final drift", linewidth=1)
+            # plt.legend()
+            # plt.xlabel(r"t    $[s]$", fontsize=14)
+            # plt.ylabel(r"x    $[pix]$", fontsize=14)
+            # plt.tight_layout()
+            # # if gvalue(measrmnt.Ifreq) == 0.066:
+            # #     plt.savefig("drift-final.pdf")
+            # # plt.clf()
+            # plt.show()
 
     valid_driftless_data, valid_driftless_times = subtract_drift_from_data_on_valid_ranges(smoothed_drift,
                                                                                            gvar_data,
@@ -223,6 +269,32 @@ def perform_fitting_on_data(gvar_data, measrmnt, expected_freq, low_limit, high_
         plt.legend()
         plt.suptitle(f"freq={gvalue(measrmnt.Ifreq):.3f}")
         plt.show()
+
+        # For ploting, eliminate the valid range starts and stops (set to None) to prevent drawing of connecting lines
+        # S tem sicer zgubiš eno točko na vsaki strani, ampak vsaj ful lepše nariše, vpliva sam na risanje! :)
+        # masked_data = gvalue(valid_driftless_data)
+        # comulative_shift = 0
+        # for i, valid_range in enumerate(valid_ranges[1:], 1):
+        #     comulative_shift += valid_range[0] - valid_ranges[i-1][1]   # Približno
+        #     masked_data[valid_range[0] - comulative_shift] = None
+        # plt.plot(gvalue(valid_driftless_times), masked_data, 'b-', label="Driftless data", linewidth=3)
+        # plt.legend()
+        # plt.xlabel(r"t    $[s]$", fontsize=14)
+        # plt.ylabel(r"x    $[pix]$", fontsize=14)
+        # plt.tight_layout()
+        # if gvalue(measrmnt.Ifreq) == 0.066:
+        #     plt.savefig("driftless-data.pdf")
+        # plt.clf()
+
+        # plt.plot(gvalue(measrmnt.times), gvalue(sinusoid_w_drift(gvalue(measrmnt.times), *data_coefs)), 'y-', label="Fit")
+        # plt.legend()
+        # plt.xlabel(r"t    $[s]$", fontsize=14)
+        # plt.ylabel(r"x    $[pix]$", fontsize=14)
+        # plt.tight_layout()
+        # if gvalue(measrmnt.Ifreq) == 0.066:
+        #     plt.savefig("final-fit.pdf")
+        # plt.clf()
+        # plt.show()
 
     return data_coefs
 

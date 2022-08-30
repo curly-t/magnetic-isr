@@ -52,6 +52,7 @@ def reanalyze_responses():
         measurements = import_filepaths(valid_folder[1])
         responses = []
         for meas in measurements:
+            print(f"Working on: {meas.dirname}")
             responses.append(freq_phase_ampl(meas))
         responses = sorted(responses, key=lambda resp: resp.rod_freq.mean)  # Sortiranje po frekvencah
         save_responses_to_txt(responses, full_export_filename)
